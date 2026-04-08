@@ -1,0 +1,118 @@
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Attendance Monitor</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Track employee check-in/out times and daily status.</p>
+        </div>
+        <a href="/attendance/add" class="btn btn-primary">
+            <i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i>
+            <span>Add Record</span>
+        </a>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
+        <div class="card-header">
+            <h3>Daily Logs</h3>
+            <div class="filter-group">
+                <select id="statusFilter" data-status-column="5">
+                    <option value="all">All Status</option>
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="overtime">Overtime</option>
+                    <option value="absent">Absent</option>
+                </select>
+                <div class="search-wrapper">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="searchInput" placeholder="Search Attendees...">
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1180px;">
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th data-sortable="true" style="white-space: nowrap;">Employee</th>
+                        <th data-sortable="true" style="white-space: nowrap;">Time In</th>
+                        <th data-sortable="true" style="white-space: nowrap;">Time Out</th>
+                        <th data-sortable="true" style="white-space: nowrap; text-align: center;">Hours</th>
+                        <th data-sortable="true" style="white-space: nowrap;">Date</th>
+                        <th data-sortable="true" style="white-space: nowrap; text-align: center;">Daily Status</th>
+                        <th data-sortable="true" style="text-align: right;">Log Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (locals.attendance && attendance.length > 0) { %>
+                        <% attendance.forEach(record => { %>
+                            <tr>
+                                <td style="font-weight: 700; color: var(--text-heading);"><%= record.name || 'N/A' %></td>
+                                <td style="font-family: monospace; color: var(--accent-info);"><%= record.timeIn || 'N/A' %></td>
+                                <td style="font-family: monospace; color: var(--accent-info);"><%= record.timeOut || 'N/A' %></td>
+                                <td style="text-align: center; font-family: monospace; font-weight: 700; color: var(--text-muted);"><%= record.hoursWorked || 'N/A' %></td>
+                                <td style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem;"><%= record.date || 'N/A' %></td>
+                                <td style="text-align: center;">
+                                    <% 
+                                       let dailyClass = 'status-present';
+                                       const dStat = (record.dailyStatus || 'Present').toLowerCase();
+                                       if(dStat === 'late') dailyClass = 'status-late';
+                                       if(dStat === 'absent') dailyClass = 'status-absent';
+                                       if(dStat === 'on leave') dailyClass = 'status-leave';
+                                       if(dStat === 'overtime') dailyClass = 'status-overtime';
+                                    %>
+                                    <span class="status-badge <%= dailyClass %>" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">
+                                        <%= record.dailyStatus || 'Present' %>
+                                    </span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <% let statusClass = 'status-default'; const stat = (record.status || 'unknown').toLowerCase();
+                                       if(stat.includes('present') || stat.includes('active') || stat.includes('timed in')) statusClass = 'status-present';
+                                       if(stat.includes('late')) statusClass = 'status-late';
+                                       if(stat.includes('absent') || stat.includes('rejected')) statusClass = 'status-absent';
+                                       if(stat.includes('leave')) statusClass = 'status-leave';
+                                       if(stat.includes('overtime')) statusClass = 'status-overtime';
+                                    %>
+                                    <span class="status-badge <%= statusClass %>">
+                                        <%= record.status || 'Unknown' %>
+                                    </span>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="7" style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">No attendance records found.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination-controls" style="padding: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        let attendanceTableManager = null;
+        if (typeof initTableManagement === 'function') {
+            attendanceTableManager = initTableManagement('#attendanceTable', '#searchInput', '.pagination-controls', 10, {
+                statusFilterSelector: '#statusFilter'
+            });
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchParam = urlParams.get('search');
+        if (searchParam) {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) searchInput.value = searchParam;
+            if (attendanceTableManager) attendanceTableManager.refresh();
+        }
+    });
+</script>
+
+<style>
+    /* Status specific styles if needed beyond global */
+    .status-late { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .status-leave { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+    .status-overtime { background: rgba(168, 85, 247, 0.12); color: #7c3aed; }
+</style>

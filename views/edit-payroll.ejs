@@ -1,0 +1,70 @@
+<div class="page-container" style="max-width: 600px; margin: 0 auto;">
+    <div class="page-header" style="margin-bottom: 2rem; text-align: center;">
+        <div>
+            <h1>Edit Payroll Details</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Adjust salary, bonuses, and deductions for <%= payroll.employeeName %>.</p>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 2.5rem;">
+        <form action="/payroll/edit/<%= payroll.id %>" method="POST">
+            <input type="hidden" name="employeeId" value="<%= payroll.employeeId || '' %>">
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Employee Name</label>
+                <input type="text" value="<%= payroll.employeeName %>" disabled style="width: 100%; opacity: 0.7; cursor: not-allowed; background: rgba(255,255,255,0.02);">
+                <small style="display: block; margin-top: 0.4rem; color: var(--text-muted); font-size: 0.7rem;">Employee identity cannot be modified here.</small>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label for="basic" style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Basic Salary (₱)</label>
+                <div style="position: relative;">
+                    <i data-lucide="banknote" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                    <input type="number" step="0.01" name="basic" id="basic" value="<%= payroll.basic %>" required style="width: 100%; padding-left: 3rem; font-family: monospace;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem;">
+                <div>
+                    <label for="bonus" style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Bonus (₱)</label>
+                    <div style="position: relative;">
+                        <i data-lucide="trending-up" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--accent-success);"></i>
+                        <input type="number" step="0.01" name="bonus" id="bonus" value="<%= payroll.bonus %>" required style="width: 100%; padding-left: 3rem; font-family: monospace; color: var(--accent-success);">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="deductions" style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Deductions (₱)</label>
+                    <div style="position: relative;">
+                        <i data-lucide="trending-down" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--accent-warning);"></i>
+                        <input type="number" step="0.01" name="deductions" id="deductions" value="<%= payroll.deductions %>" required style="width: 100%; padding-left: 3rem; font-family: monospace; color: var(--accent-warning);">
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 2.5rem;">
+                <label for="status" style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Payroll Status</label>
+                <select name="status" id="status" style="width: 100%;">
+                    <option value="Pending" <%= payroll.status === 'Pending' ? 'selected' : '' %>>Pending</option>
+                    <option value="Processed" <%= payroll.status === 'Processed' ? 'selected' : '' %>>Processed</option>
+                    <option value="Paid" <%= payroll.status === 'Paid' ? 'selected' : '' %>>Paid</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1; padding: 1rem; font-weight: 800; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <i data-lucide="check-circle" style="width: 18px; height: 18px;"></i>
+                    <span>UPDATE PAYROLL</span>
+                </button>
+                <a href="/manage-payroll" class="btn" style="flex: 1; padding: 1rem; font-weight: 800; letter-spacing: 0.05em; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-glass); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <span>CANCEL</span>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+    });
+</script>

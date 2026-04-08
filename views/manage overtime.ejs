@@ -1,0 +1,103 @@
+<%
+    const statusClassMap = {
+        'Approved': 'status-present',
+        'Rejected': 'status-absent',
+        'Pending': 'status-late'
+    };
+%>
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Manage Overtime Requests</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Review and process employee overtime submittals for the current period.</p>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
+        <div class="card-header">
+            <h3>Request Logs</h3>
+            <div class="filter-group">
+                <select id="statusFilter" data-status-column="5">
+                    <option value="all">All Status</option>
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+                <div class="search-wrapper">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="searchInput" placeholder="Find Request...">
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1080px;">
+            <table id="overtimeTable">
+                <thead>
+                    <tr>
+                        <th data-sortable="true">ID</th>
+                        <th data-sortable="true">Employee</th>
+                        <th class="text-right" data-sortable="true">Date</th>
+                        <th class="text-center" data-sortable="true">Hours</th>
+                        <th>Reason</th>
+                        <th class="text-right" data-sortable="true">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (overtimeRequests && overtimeRequests.length > 0) { %>
+                        <% overtimeRequests.forEach(request => { %>
+                            <tr>
+                                <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">#<%= request.id.substring(0, 8) %></td>
+                                <td>
+                                    <div style="font-weight: 700; color: var(--text-heading);"><%= request.employee %></div>
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.9rem;"><%= request.date %></td>
+                                <td style="font-weight: 800; color: var(--accent-indigo); font-family: monospace;"><%= request.hours %>h</td>
+                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 0.85rem;" title="<%= request.reason %>"><%= request.reason %></td>
+                                <td>
+                                    <span class="status-badge <%= statusClassMap[request.status] || 'status-default' %>"><%= request.status || 'Unknown' %></span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <% if (request.status === 'Pending') { %>
+                                        <div class="table-action-group">
+                                            <form action="/manage-overtime/approve/<%= request.id %>" method="POST" class="inline">
+                                                <button type="submit" class="btn-action btn-approve" title="Approve">
+                                                    <i data-lucide="check" style="width: 18px; height: 18px;"></i>
+                                                </button>
+                                            </form>
+                                            <form action="/manage-overtime/reject/<%= request.id %>" method="POST" class="inline" onsubmit="confirmDelete(this, 'Reject Request', 'Are you sure you want to reject this overtime request?')">
+                                                <button type="submit" class="btn-action btn-reject" title="Reject">
+                                                    <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    <% } else { %>
+                                        <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.5;">Processed</span>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="7" style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">No overtime records found.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination-controls"
+            style="padding: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);">
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        if (typeof initTableManagement === 'function') {
+            initTableManagement('#overtimeTable', '#searchInput', '.pagination-controls', 8, {
+                statusFilterSelector: '#statusFilter'
+            });
+        }
+    });
+</script>

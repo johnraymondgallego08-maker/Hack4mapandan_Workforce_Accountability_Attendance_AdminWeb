@@ -1,0 +1,118 @@
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Manage Users</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">View and manage system access for all employees.</p>
+        </div>
+        <a href="/register" class="btn btn-primary">
+            <i data-lucide="user-plus" style="width: 18px; height: 18px;"></i>
+            <span>Add New User</span>
+        </a>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
+        <div class="card-header">
+            <h3>All System Users</h3>
+            <div class="search-wrapper">
+                <i data-lucide="search"></i>
+                <input type="text" id="searchInput" placeholder="Search Users...">
+            </div>
+        </div>
+
+        <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1120px;">
+            <table id="usersTable">
+                <thead>
+                    <tr>
+                        <th data-sortable="true">User</th>
+                        <th data-sortable="true">Role</th>
+                        <th data-sortable="true">Employee Status</th>
+                        <th>Work Schedule</th>
+                        <th>Supervisor</th>
+                        <th data-sortable="true">Account Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% users.forEach(user=> { %>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <div
+                                        style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 800; border: 2px solid var(--border-glass); overflow: hidden;">
+                                        <% if (user.photoUrl) { %>
+                                            <img src="<%= user.photoUrl %>" alt="<%= user.name %>"
+                                                style="width: 100%; height: 100%; object-fit: cover;">
+                                            <% } else { %>
+                                                <%= user.name ? user.name.charAt(0).toUpperCase() : '?' %>
+                                                    <% } %>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 700; color: var(--text-heading);">
+                                            <%= user.name || 'N/A' %>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                            <%= user.email || 'N/A' %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span
+                                    style="background: rgba(255,255,255,0.05); color: var(--text-muted); padding: 0.25rem 0.75rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                                    <%= user.role || 'N/A' %>
+                                </span>
+                            </td>
+                            <td>
+                                <span
+                                    style="background: rgba(124, 58, 237, 0.08); color: var(--primary-dark); padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+                                    <%= user.employmentStatus || '-' %>
+                                </span>
+                            </td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">
+                                <%= user.workSchedule || '-' %>
+                            </td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                <%= user.supervisor || '-' %>
+                            </td>
+                            <td>
+                                <span
+                                    class="status-badge <%= user.status && user.status.toLowerCase() === 'active' ? 'status-present' : 'status-absent' %>">
+                                    <%= user.status || 'Unknown' %>
+                                </span>
+                            </td>
+                            <td style="text-align: right;">
+                                <div class="table-action-group">
+                                    <a href="/users/edit/<%= user.id %>" class="btn-action" title="Edit"
+                                        style="display: inline-flex; align-items: center; justify-content: center;">
+                                        <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
+                                    </a>
+                                    <form action="/users/delete/<%= user.id %>" method="POST" class="inline"
+                                        style="margin: 0; display: inline-flex;"
+                                        onsubmit="confirmDelete(this, 'Delete Employee', 'This will permanently remove the employee account and its saved profile data.')">
+                                        <button type="submit" class="btn-action btn-delete" title="Delete"
+                                            style="display: inline-flex; align-items: center; justify-content: center;">
+                                            <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <% }) %>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination-controls"
+            style="padding: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);">
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        if (typeof initTableManagement === 'function') {
+            initTableManagement('#usersTable', '#searchInput', '.pagination-controls', 8);
+        }
+    });
+</script>

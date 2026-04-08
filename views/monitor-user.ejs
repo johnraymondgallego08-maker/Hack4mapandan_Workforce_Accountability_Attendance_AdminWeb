@@ -1,0 +1,64 @@
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Real-Time Workforce Monitoring</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Observe active employee status and quickly access detailed frequency logs.</p>
+        </div>
+        <div class="search-wrapper">
+            <i data-lucide="search"></i>
+            <input type="text" id="monitorSearch" placeholder="Find Employee...">
+        </div>
+    </div>
+
+    <div id="monitorGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+        <% if (locals.users && users.length > 0) { %>
+            <% users.forEach(user => { %>
+                <div class="user-card card" style="padding: 0; display: flex; flex-direction: column; overflow: hidden; transition: transform 0.3s ease; height: 100%;">
+                    <div style="padding: 1.5rem; flex-grow: 1;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem;">
+                            <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 800; box-shadow: var(--shadow-glow);">
+                                <%= user.name ? user.name.charAt(0).toUpperCase() : '?' %>
+                            </div>
+                            <span class="status-badge <%= user.status && user.status.toLowerCase() === 'active' ? 'status-present' : 'status-default' %>">
+                                <%= user.status || 'Unknown' %>
+                            </span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-heading); margin-bottom: 0.25rem;">
+                            <%= user.name || 'Unnamed User' %>
+                        </h3>
+                        <p style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);">
+                            <%= user.role || 'Personnel' %>
+                        </p>
+                    </div>
+                    <button class="btn" style="width: 100%; padding: 1rem; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; background: rgba(255,255,255,0.03); color: var(--text-muted); border-top: 1px solid var(--border-glass); text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: 0; box-shadow: none;" onclick="window.location.href='/attendance-monitor?search=<%= encodeURIComponent(user.name || String()) %>'">
+                        <i data-lucide="activity" style="width: 14px; height: 14px;"></i>
+                        <span>View Activity Log</span>
+                    </button>
+                </div>
+            <% }) %>
+        <% } else { %>
+            <div style="grid-column: 1 / -1; padding: 4rem; text-align: center; background: var(--surface-glass); border: 2px dashed var(--border-glass); border-radius: 1rem;">
+                <p style="color: var(--text-muted); font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">No workforce members available to monitor.</p>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        const searchInput = document.getElementById('monitorSearch');
+        const userCards = document.querySelectorAll('.user-card');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase().trim();
+                userCards.forEach(card => {
+                    const text = card.textContent.toLowerCase();
+                    card.style.display = text.includes(term) ? 'flex' : 'none';
+                });
+            });
+        }
+    });
+</script>

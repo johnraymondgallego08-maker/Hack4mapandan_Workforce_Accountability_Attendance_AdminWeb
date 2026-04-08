@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Access | Secure Terminal</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="auth-page" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top right, #1e1b4b, #020617);">
+
+    <!-- Flash Messages Container -->
+    <div style="position: fixed; top: 1.5rem; right: 1.5rem; z-index: 2000; width: 340px; display: flex; flex-direction: column; gap: 1rem;">
+        <% if (locals.messages && locals.messages.success) { %>
+            <div class="surface-glass" style="padding: 1rem; border-left: 4px solid var(--accent-success); animation: slideIn 0.3s ease-out; position: relative;">
+                <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                    <i data-lucide="check-circle" style="width: 18px; height: 18px; color: var(--accent-success); margin-top: 0.1rem;"></i>
+                    <div style="flex-grow: 1;">
+                        <h4 style="margin: 0; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-success);">Operation Successful</h4>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-muted);"><%= locals.messages.success %></p>
+                    </div>
+                    <button onclick="this.closest('.surface-glass').style.display='none'" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.2rem;">
+                        <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+            </div>
+        <% } %>
+
+        <% if (locals.messages && locals.messages.error) { %>
+            <div class="surface-glass" style="padding: 1rem; border-left: 4px solid var(--accent-error); animation: slideIn 0.3s ease-out; position: relative;">
+                <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                    <i data-lucide="alert-circle" style="width: 18px; height: 18px; color: var(--accent-error); margin-top: 0.1rem;"></i>
+                    <div style="flex-grow: 1;">
+                        <h4 style="margin: 0; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-error);">Access Error</h4>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-muted);"><%= locals.messages.error %></p>
+                    </div>
+                    <button onclick="this.closest('.surface-glass').style.display='none'" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.2rem;">
+                        <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+            </div>
+        <% } %>
+    </div>
+
+    <div class="app-container">
+        <div class="content">
+            <script>
+                // Your web app's Firebase configuration
+                const firebaseConfig = <%- JSON.stringify(firebaseConfig || {}) %>;
+
+                // Initialize Firebase
+                if (firebaseConfig && firebaseConfig.apiKey) {
+                    firebase.initializeApp(firebaseConfig);
+                } else {
+                    console.warn("Firebase config missing or invalid on auth page");
+                }
+
+                document.addEventListener('DOMContentLoaded', () => {
+                    if (window.lucide) {
+                        lucide.createIcons();
+                    }
+                });
+            </script>

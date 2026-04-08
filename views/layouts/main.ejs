@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance Payroll Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="/style.css">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body class="<%= !user ? 'auth-page' : '' %>">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="flash-stack">
+        <% if (locals.messages && locals.messages.success) { %>
+            <div class="alert alert-success" data-autohide="true" style="opacity: 0; animation: fadeIn 0.5s forwards;">
+                <div class="alert__accent"></div>
+                <div class="alert__icon" aria-hidden="true">✓</div>
+                <div class="alert__content">
+                    <span class="alert__eyebrow">Success</span>
+                    <div class="alert__message"><%= Array.isArray(locals.messages.success) ? locals.messages.success.join(' ') : locals.messages.success %></div>
+                </div>
+                <button type="button" class="flash-close" aria-label="Dismiss message" onclick="dismissFlash(this.parentElement)">&times;</button>
+                <div class="alert__progress"></div>
+            </div>
+            <% } %>
+            <% if (locals.messages && locals.messages.error) { %>
+                <div class="alert alert-danger" data-autohide="true" style="opacity: 0; animation: fadeIn 0.5s forwards;">
+                    <div class="alert__accent"></div>
+                    <div class="alert__icon" aria-hidden="true">!</div>
+                    <div class="alert__content">
+                        <span class="alert__eyebrow">Attention</span>
+                        <div class="alert__message"><%= Array.isArray(locals.messages.error) ? locals.messages.error.join(' ') : locals.messages.error %></div>
+                    </div>
+                    <button type="button" class="flash-close" aria-label="Dismiss message" onclick="dismissFlash(this.parentElement)">&times;</button>
+                    <div class="alert__progress"></div>
+                </div>
+                <% } %>
+    </div>
+
+    <% if (user) { %>
+        <div class="app-container">
+            <div class="mobile-topbar">
+                <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open navigation">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div class="mobile-topbar__brand">Admin Panel</div>
+                <div id="digital-clock-mobile" class="clock-widget" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; background: var(--surface-glass); padding: 0.45rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-glass);"></div>
+            </div>
+
+            <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+            <aside class="sidebar">
+                <div class="sidebar-brand">
+                    <h2>Admin</h2>
+                    <span>Secure operations workspace</span>
+                </div>
+
+                <% if (user) { %>
+                    <a href="/user-info" class="sidebar-user-card">
+                        <div class="sidebar-user-card__avatar">
+                            <% if (user.photoUrl || user.profileImage) { %>
+                                <img src="<%= user.photoUrl || user.profileImage %>" alt="<%= user.name || 'Admin' %>">
+                            <% } else { %>
+                                <span><%= (user.name || user.email || 'A').charAt(0).toUpperCase() %></span>
+                            <% } %>
+                        </div>
+                        <div class="sidebar-user-card__content">
+                            <strong><%= user.name || 'Administrator' %></strong>
+                            <span><%= user.email || 'Admin access' %></span>
+                        </div>
+                    </a>
+                <% } %>
+
+                <nav aria-label="Primary navigation">
+                <ul>
+                    <li>
+                        <a href="/" class="<%= path === '/' ? 'active' : '' %>" aria-current="<%= path === '/' ? 'page' : 'false' %>">
+                            <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/device-recognition" class="<%= path === '/device-recognition' ? 'active' : '' %>" aria-current="<%= path === '/device-recognition' ? 'page' : 'false' %>">
+                            <i data-lucide="tablet"></i> <span>Devices</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/user-info" class="<%= path === '/user-info' ? 'active' : '' %>" aria-current="<%= path === '/user-info' ? 'page' : 'false' %>">
+                            <i data-lucide="users"></i> <span>User Info</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/image-recognition" class="<%= path === '/image-recognition' ? 'active' : '' %>" aria-current="<%= path === '/image-recognition' ? 'page' : 'false' %>">
+                            <i data-lucide="image"></i> <span>Images</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manage-leave" class="<%= path === '/manage-leave' ? 'active' : '' %>" aria-current="<%= path === '/manage-leave' ? 'page' : 'false' %>">
+                            <i data-lucide="calendar-off"></i> <span>Leave</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manage-overtime" class="<%= path === '/manage-overtime' ? 'active' : '' %>" aria-current="<%= path === '/manage-overtime' ? 'page' : 'false' %>">
+                            <i data-lucide="clock"></i> <span>Overtime</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/monitor-user" class="<%= path === '/monitor-user' ? 'active' : '' %>" aria-current="<%= path === '/monitor-user' ? 'page' : 'false' %>">
+                            <i data-lucide="activity"></i> <span>Monitor</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/attendance-monitor" class="<%= path === '/attendance-monitor' ? 'active' : '' %>" aria-current="<%= path === '/attendance-monitor' ? 'page' : 'false' %>">
+                            <i data-lucide="clipboard-check"></i> <span>Attendance</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manage-users" class="<%= path === '/manage-users' ? 'active' : '' %>" aria-current="<%= path === '/manage-users' ? 'page' : 'false' %>">
+                            <i data-lucide="users-2"></i> <span>Manage Users</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manage-payroll" class="<%= path === '/manage-payroll' ? 'active' : '' %>" aria-current="<%= path === '/manage-payroll' ? 'page' : 'false' %>">
+                            <i data-lucide="banknote"></i> <span>Payroll</span>
+                        </a>
+                    </li>
+                    <li style="margin-top: auto;">
+                        <a href="/logout" style="color: var(--accent-danger);">
+                            <i data-lucide="log-out"></i> <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+                </nav>
+
+                <% if (locals.firebaseConfig && locals.firebaseConfig.projectId) { %>
+                <div class="sidebar-status">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="status-dot status-present"></div>
+                        <%= locals.firebaseConfig.projectId %>
+                    </div>
+                </div>
+                <% } %>
+            </aside>
+
+            <main class="content" id="main-content" tabindex="-1">
+                <div class="top-clock-row" style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                    <div id="digital-clock" class="clock-widget" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem; background: var(--surface-glass); padding: 0.5rem 1rem; border-radius: 2rem; border: 1px solid var(--border-glass);"></div>
+                </div>
+
+                <%- body %>
+            </main>
+        </div>
+
+        <% } else { %>
+            <div class="auth-page">
+                <%- body %>
+            </div>
+            <% } %>
+
+            <script>
+                // Initialize Lucide icons
+                lucide.createIcons();
+
+                // Clock Logic
+                function updateClock() {
+                    const now = new Date();
+                    const clockElement = document.getElementById('digital-clock');
+                    const mobileClockElement = document.getElementById('digital-clock-mobile');
+                    const timeText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    if (clockElement) {
+                        clockElement.textContent = timeText;
+                    }
+                    if (mobileClockElement) {
+                        mobileClockElement.textContent = timeText;
+                    }
+                }
+                setInterval(updateClock, 1000);
+                updateClock();
+
+                // Responsive Tables
+                document.addEventListener('DOMContentLoaded', () => {
+                    const sidebar = document.querySelector('.sidebar');
+                    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+                    const closeSidebar = () => {
+                        if (sidebar) sidebar.classList.remove('is-open');
+                        if (sidebarOverlay) sidebarOverlay.classList.remove('is-visible');
+                    };
+
+                    const openSidebar = () => {
+                        if (sidebar) sidebar.classList.add('is-open');
+                        if (sidebarOverlay) sidebarOverlay.classList.add('is-visible');
+                    };
+
+                    if (mobileMenuBtn) {
+                        mobileMenuBtn.addEventListener('click', () => {
+                            const isOpen = sidebar && sidebar.classList.contains('is-open');
+                            if (isOpen) closeSidebar();
+                            else openSidebar();
+                        });
+                    }
+
+                    if (sidebarOverlay) {
+                        sidebarOverlay.addEventListener('click', closeSidebar);
+                    }
+
+                    document.addEventListener('keydown', (event) => {
+                        if (event.key === 'Escape') closeSidebar();
+                    });
+
+                    document.querySelectorAll('.sidebar a').forEach(link => {
+                        link.addEventListener('click', closeSidebar);
+                    });
+
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth > 768) closeSidebar();
+                    });
+
+                    document.querySelectorAll('table').forEach(table => {
+                        if (!table.parentElement.classList.contains('table-responsive')) {
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'table-responsive';
+                            table.parentNode.insertBefore(wrapper, table);
+                            wrapper.appendChild(table);
+                        }
+                    });
+
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                    if (csrfToken) {
+                        document.querySelectorAll('form').forEach((form) => {
+                            const method = (form.getAttribute('method') || 'GET').toUpperCase();
+                            const action = form.getAttribute('action') || '';
+                            if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
+                            if (action.startsWith('http')) return;
+
+                            let csrfInput = form.querySelector('input[name="_csrf"]');
+                            if (!csrfInput) {
+                                csrfInput = document.createElement('input');
+                                csrfInput.type = 'hidden';
+                                csrfInput.name = '_csrf';
+                                form.appendChild(csrfInput);
+                            }
+                            csrfInput.value = csrfToken;
+                        });
+                    }
+
+                    document.querySelectorAll('form').forEach((form) => {
+                        form.addEventListener('submit', (event) => {
+                            window.setTimeout(() => {
+                                if (event.defaultPrevented) return;
+                                const submitButtons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+                                submitButtons.forEach((button) => {
+                                    if (button.dataset.allowMultiple === 'true') return;
+                                    button.disabled = true;
+                                    button.classList.add('is-submitting');
+                                });
+                                form.classList.add('is-submitting');
+                            }, 0);
+                        });
+                    });
+
+                    document.querySelectorAll('.alert[data-autohide="true"]').forEach((alertElement) => {
+                        const progress = alertElement.querySelector('.alert__progress');
+                        let timeoutId = null;
+                        let remaining = 5200;
+                        let startTime = Date.now();
+
+                        const startDismissTimer = () => {
+                            startTime = Date.now();
+                            if (progress) progress.style.animationPlayState = 'running';
+                            timeoutId = window.setTimeout(() => dismissFlash(alertElement), remaining);
+                        };
+
+                        const pauseDismissTimer = () => {
+                            if (!timeoutId) return;
+                            window.clearTimeout(timeoutId);
+                            timeoutId = null;
+                            remaining -= Date.now() - startTime;
+                            if (progress) progress.style.animationPlayState = 'paused';
+                        };
+
+                        alertElement.addEventListener('mouseenter', pauseDismissTimer);
+                        alertElement.addEventListener('mouseleave', () => {
+                            if (remaining > 0) startDismissTimer();
+                        });
+
+                        startDismissTimer();
+                    });
+                });
+
+                // Custom SweetAlert Helpers
+                window.dismissFlash = (element) => {
+                    if (!element) return;
+                    element.classList.add('alert--closing');
+                    window.setTimeout(() => {
+                        element.remove();
+                    }, 260);
+                };
+
+                const escapeSwalHtml = (value = '') => String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+
+                const buildSwalOptions = ({
+                    title,
+                    text,
+                    icon,
+                    confirmButtonText,
+                    cancelButtonText = 'Keep it',
+                    accent = 'primary'
+                }) => ({
+                    title,
+                    html: `
+                        <div class="swal-custom-body">
+                            <p>${escapeSwalHtml(text)}</p>
+                            <div class="swal-custom-tip">
+                                <span class="swal-custom-tip__dot swal-custom-tip__dot--${accent}"></span>
+                                <span>${icon === 'warning' ? 'Review this action carefully before continuing.' : 'Your changes will be applied immediately.'}</span>
+                            </div>
+                        </div>
+                    `,
+                    icon,
+                    showCancelButton: true,
+                    reverseButtons: true,
+                    buttonsStyling: false,
+                    focusCancel: true,
+                    confirmButtonText,
+                    cancelButtonText,
+                    showClass: {
+                        popup: 'swal-show'
+                    },
+                    hideClass: {
+                        popup: 'swal-hide'
+                    },
+                    customClass: {
+                        popup: 'swal-custom-popup',
+                        title: 'swal-custom-title',
+                        htmlContainer: 'swal-custom-html',
+                        actions: 'swal-custom-actions',
+                        confirmButton: 'swal2-styled swal2-confirm',
+                        cancelButton: 'swal2-styled swal2-cancel',
+                        footer: 'swal-custom-footer'
+                    },
+                    footer: 'Press ESC to cancel quickly'
+                });
+
+                window.confirmDelete = (form, title = 'Are you sure?', text = "This action cannot be undone.") => {
+                    if (event) event.preventDefault();
+                    Swal.fire({
+                        ...buildSwalOptions({
+                            title,
+                            text,
+                            icon: 'warning',
+                            confirmButtonText: 'Delete now',
+                            cancelButtonText: 'Cancel',
+                            accent: 'danger'
+                        })
+                    }).then((result) => {
+                        if (result.isConfirmed) form.submit();
+                    });
+                };
+
+                window.confirmUpdate = (form, title = 'Confirm Update', text = "Save these changes?") => {
+                    if (event) event.preventDefault();
+                    Swal.fire({
+                        ...buildSwalOptions({
+                            title,
+                            text,
+                            icon: 'question',
+                            confirmButtonText: 'Save changes',
+                            cancelButtonText: 'Go back',
+                            accent: 'primary'
+                        })
+                    }).then((result) => {
+                        if (result.isConfirmed) form.submit();
+                    });
+                };
+            </script>
+
+            <!-- Firebase SDK -->
+            <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+            <script src="/js/table-management.js"></script>
+
+            <script>
+                const firebaseConfig = {
+                    apiKey: "<%= locals.firebaseConfig ? locals.firebaseConfig.apiKey : '' %>",
+                    authDomain: "<%= locals.firebaseConfig ? locals.firebaseConfig.authDomain : '' %>",
+                    projectId: "<%= locals.firebaseConfig ? locals.firebaseConfig.projectId : '' %>",
+                    storageBucket: "<%= locals.firebaseConfig ? locals.firebaseConfig.storageBucket : '' %>",
+                    messagingSenderId: "<%= locals.firebaseConfig ? locals.firebaseConfig.messagingSenderId : '' %>",
+                    appId: "<%= locals.firebaseConfig ? locals.firebaseConfig.appId : '' %>"
+                };
+
+                if (firebaseConfig && firebaseConfig.apiKey) {
+                    firebase.initializeApp(firebaseConfig);
+                    window.db = firebase.firestore();
+                }
+            </script>
+
+</body>
+
+</html>

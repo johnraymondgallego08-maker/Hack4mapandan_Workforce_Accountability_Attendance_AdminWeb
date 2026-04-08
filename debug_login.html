@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance Payroll Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Custom Styles (Component Layer) -->
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SweetAlert2 for Popups -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+</head>
+
+<body class="auth-page">
+
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 1050; width: 300px;">
+        
+                
+    </div>
+
+    
+            <!-- Auth Layout (Login/Register) -->
+            <div class="auth-container">
+                <script>
+    document.body.classList.add('auth-page');
+</script>
+
+<div class="auth-container">
+    
+        <div style="text-align: center; margin-bottom: 1.5rem; font-size: 0.875rem; color: #6b7280;">
+            Project: <span style="font-weight: 600; color: #374151;">attendance-app-d29ad</span>
+        </div>
+    
+
+<h1>Login</h1>
+
+<form id="login-form">
+    <div id="error-message" class="alert alert-danger" style="display: none; margin-bottom: 1rem;"></div>
+
+    <input type="email" id="email" name="email" placeholder="Email" required>
+
+    <input type="password" id="password" name="password" placeholder="Password" required>
+
+    <button type="submit" id="login-button">Login</button>
+
+</form>
+
+</div>
+
+<script>
+    const loginForm = document.getElementById('login-form');
+    const loginButton = document.getElementById('login-button');
+    const errorMessageDiv = document.getElementById('error-message');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        loginButton.disabled = true;
+        loginButton.textContent = 'Logging in...';
+        errorMessageDiv.style.display = 'none';
+
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            // 1. Sign in with Firebase on the client
+            const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+            
+            // 2. Get the ID token from the signed-in user
+            const idToken = await userCredential.user.getIdToken();
+
+            // 3. Send the ID token to your server for verification and session creation
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ idToken: idToken }),
+            });
+
+            if (response.ok) {
+                // 4. If server login is successful, redirect to the dashboard
+                window.location.href = '/';
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server validation failed.');
+            }
+        } catch (error) {
+            errorMessageDiv.textContent = error.message;
+            errorMessageDiv.style.display = 'block';
+            loginButton.disabled = false;
+            loginButton.textContent = 'Login';
+        }
+    });
+</script>
+            </div>
+            
+
+                <script>
+                    const menuToggle = document.getElementById('menu-toggle');
+                    const sidebar = document.querySelector('.sidebar');
+                    const content = document.querySelector('.content');
+
+                    if (menuToggle && sidebar) {
+                        menuToggle.addEventListener('click', () => {
+                            sidebar.classList.toggle('is-open');
+                        });
+
+                        content.addEventListener('click', () => {
+                            if (sidebar.classList.contains('is-open')) {
+                                sidebar.classList.remove('is-open');
+                            }
+                        });
+                    }
+
+                    // --- Clock and Calendar Logic ---
+                    document.addEventListener('DOMContentLoaded', () => {
+                        const hourHand = document.getElementById('hour-hand');
+                        const minuteHand = document.getElementById('minute-hand');
+                        const secondHand = document.getElementById('second-hand');
+                        const digitalClock = document.getElementById('digital-clock');
+                        const mobileClock = document.getElementById('mobile-clock');
+
+                        function setDate() {
+                            const now = new Date();
+
+                            if (secondHand) { // Analog clock elements exist
+                                const seconds = now.getSeconds();
+                                const secondsDegrees = ((seconds / 60) * 360) + 90;
+                                secondHand.style.transform = `rotate(${secondsDegrees}deg)`;
+
+                                const minutes = now.getMinutes();
+                                const minutesDegrees = ((minutes / 60) * 360) + ((seconds / 60) * 6) + 90;
+                                minuteHand.style.transform = `rotate(${minutesDegrees}deg)`;
+
+                                const hours = now.getHours();
+                                const hoursDegrees = ((hours / 12) * 360) + ((minutes / 60) * 30) + 90;
+                                hourHand.style.transform = `rotate(${hoursDegrees}deg)`;
+                            }
+
+                            if (digitalClock) {
+                                digitalClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            }
+
+                            if (mobileClock) {
+                                mobileClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            }
+                        }
+
+                        setInterval(setDate, 1000);
+                        setDate();
+                    });
+                </script>
+                <script>
+                    const tailwindSwal = Swal.mixin({
+                        customClass: {
+                            popup: 'swal-custom-popup',
+                            title: 'swal-custom-title',
+                            confirmButton: 'btn btn-primary',
+                            cancelButton: 'btn btn-secondary',
+                            actions: 'swal-custom-actions'
+                        },
+                        buttonsStyling: false,
+                        background: '#ffffff',
+                        backdrop: 'rgba(15, 23, 42, 0.4)'
+                    });
+
+                    function confirmDelete(form, title = 'Are you sure?', text = "You won't be able to revert this!") {
+                        const e = window.event || event;
+                        if (e) e.preventDefault();
+
+                        tailwindSwal.fire({
+                            title: title,
+                            text: text,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, delete it!'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                form.submit();
+                            }
+                        });
+                    }
+
+                    function confirmUpdate(form, title = 'Confirm Update', text = "Are you sure you want to save these changes?") {
+                        const e = window.event || event;
+                        if (e) e.preventDefault();
+
+                        tailwindSwal.fire({
+                            title: title,
+                            text: text,
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, update it!'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                form.submit();
+                            }
+                        });
+                    }
+                </script>
+                <script>
+                    // Automatically wrap all tables in .table-responsive for horizontal scrolling
+                    document.addEventListener('DOMContentLoaded', () => {
+                        const tables = document.querySelectorAll('table');
+                        tables.forEach(table => {
+                            if (!table.parentElement.classList.contains('table-responsive')) {
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'table-responsive';
+                                table.parentNode.insertBefore(wrapper, table);
+                                wrapper.appendChild(table);
+                            }
+                        });
+                    });
+                </script>
+                <script src="/js/table-management.js"></script>
+
+                <!-- Firebase SDK -->
+                <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+                <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+                <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+
+                <script>
+                    // Your web app's Firebase configuration
+                    const firebaseConfig = ;
+
+                    if (firebaseConfig && firebaseConfig.apiKey) {
+                        // Initialize Firebase
+                        firebase.initializeApp(firebaseConfig);
+                        window.db = firebase.firestore();
+                    } else {
+                        console.warn("FIREBASE CONFIG MISSING OR EMPTY. Check .env file. Client Firebase features disabled.");
+                    }
+                </script>
+
+</body>
+
+</html>

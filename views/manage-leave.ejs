@@ -1,0 +1,280 @@
+<div class="page-container">
+    <style>
+        /* Optimize History Table for compact visibility */
+        #historyTable {
+            width: 100%;
+        }
+
+        #historyTable th,
+        #historyTable td {
+            padding: 0.7rem 0.85rem !important;
+            font-size: 0.85rem;
+            vertical-align: top;
+        }
+
+        #historyTable th:last-child,
+        #historyTable td:last-child {
+            padding-right: 1.5rem !important;
+        }
+
+        #historyTable th:nth-child(1),
+        #historyTable td:nth-child(1) {
+            min-width: 220px;
+        }
+
+        #historyTable th:nth-child(2),
+        #historyTable td:nth-child(2) {
+            min-width: 140px;
+        }
+
+        #historyTable th:nth-child(6),
+        #historyTable td:nth-child(6) {
+            min-width: 300px;
+        }
+
+        #historyTable th:nth-child(3),
+        #historyTable td:nth-child(3),
+        #historyTable th:nth-child(4),
+        #historyTable td:nth-child(4),
+        #historyTable th:nth-child(5),
+        #historyTable td:nth-child(5),
+        #historyTable th:nth-child(7),
+        #historyTable td:nth-child(7),
+        #historyTable th:nth-child(8),
+        #historyTable td:nth-child(8),
+        #historyTable th:nth-child(9),
+        #historyTable td:nth-child(9) {
+            white-space: nowrap;
+        }
+    </style>
+    <div class="page-header">
+        <div>
+            <h1>Manage Leave Requests</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Review, approve, or reject employee leave
+                applications.</p>
+        </div>
+    </div>
+
+    <% const pendingLeaves=[]; const historyLeaves=[]; if (locals.leaves) { leaves.forEach(leave=> {
+        if (!leave.status || leave.status.toLowerCase() === 'pending') {
+        pendingLeaves.push(leave);
+        } else {
+        historyLeaves.push(leave);
+        }
+        });
+        }
+        %>
+
+        <!-- Pending Requests Section -->
+        <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem; margin-bottom: 2rem;">
+            <div class="card-header">
+                <h3>Pending Applications</h3>
+            </div>
+            <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1180px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="white-space: nowrap;">Employee</th>
+                            <th style="white-space: nowrap;">Type</th>
+                            <th style="white-space: nowrap; text-align: right;">Requested On</th>
+                            <th style="white-space: nowrap; text-align: right;">
+                                Start Date</th>
+                            <th style="white-space: nowrap; text-align: right;">
+                                End Date</th>
+                            <th style="min-width: 200px;">Reason</th>
+                            <th style="text-align: right;">Status</th>
+                            <th style="text-align: right; min-width: 180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (pendingLeaves.length> 0) { %>
+                            <% pendingLeaves.forEach(leave=> { %>
+                                <tr>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <div
+                                                style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; overflow: hidden; flex-shrink: 0;">
+                                                <% if (leave.photoUrl) { %>
+                                                    <img src="<%= leave.photoUrl %>" alt="<%= leave.employeeName %>"
+                                                        style="width: 100%; height: 100%; object-fit: cover;">
+                                                    <% } else { %>
+                                                        <%= leave.employeeName.charAt(0).toUpperCase() %>
+                                                            <% } %>
+                                            </div>
+                                            <span style="font-weight: 700; color: var(--text-heading);">
+                                                <%= leave.employeeName %>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style="font-weight: 600; color: var(--text-muted);">
+                                        <%= leave.leaveType || leave.type %>
+                                    </td>
+                                    <td
+                                        style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; text-align: right;">
+                                        <%= leave.requestedDate || leave.actionDate || leave.startDate || '-' %>
+                                    </td>
+                                    <td
+                                        style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; text-align: right;">
+                                        <%= leave.startDate %>
+                                    </td>
+                                    <td
+                                        style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; text-align: right;">
+                                        <%= leave.endDate %>
+                                    </td>
+                                    <td
+                                        style="font-size: 0.85rem; color: var(--text-muted); max-width: 320px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5;">
+                                        <%= leave.reason %>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span class="status-badge status-late">Pending</span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <div class="table-action-group">
+                                            <form action="/leave/approve/<%= leave.id %>" method="POST" class="inline">
+                                                <button type="submit" class="btn-action btn-approve" title="Approve">
+                                                    <i data-lucide="check" style="width: 18px; height: 18px;"></i>
+                                                </button>
+                                            </form>
+                                            <form action="/leave/reject/<%= leave.id %>" method="POST" class="inline">
+                                                <button type="submit" class="btn-action btn-reject" title="Reject">
+                                                    <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                                    <% } else { %>
+                                        <tr>
+                                            <td colspan="8"
+                                                style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">
+                                                No pending requests.</td>
+                                        </tr>
+                                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
+            <div class="card-header">
+                <h3>Request History</h3>
+                <div class="filter-group">
+                    <select id="statusFilter" data-status-column="7">
+                        <option value="">All Status</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <div class="search-wrapper">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="searchInput" placeholder="Search history...">
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive"
+                style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1320px;">
+                <table id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Type</th>
+                            <th style="text-align: right; white-space: nowrap;">Requested On</th>
+                            <th style="text-align: right;">Start Date</th>
+                            <th style="text-align: right;">End Date</th>
+                            <th>Reason</th>
+                            <th style="text-align: right; white-space: nowrap;">Action Date</th>
+                            <th style="text-align: right;">Status</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <% if (historyLeaves.length> 0) { %>
+                            <% historyLeaves.forEach(leave=> { %>
+                                <tr>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <div
+                                                style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary-gradient); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; overflow: hidden; flex-shrink: 0;">
+                                                <% if (leave.photoUrl) { %>
+                                                    <img src="<%= leave.photoUrl %>" alt="<%= leave.employeeName %>"
+                                                        style="width: 100%; height: 100%; object-fit: cover;">
+                                                    <% } else { %>
+                                                        <%= leave.employeeName.charAt(0).toUpperCase() %>
+                                                            <% } %>
+                                            </div>
+                                            <span style="font-weight: 700; color: var(--text-heading);">
+                                                <%= leave.employeeName %>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style="font-weight: 600; color: var(--text-muted);">
+                                        <%= leave.leaveType || leave.type %>
+                                    </td>
+                                    <td
+                                        style="text-align: right; font-size: 0.75rem; color: var(--text-muted); font-family: monospace; white-space: nowrap;">
+                                        <%= leave.requestedDate || leave.actionDate || leave.startDate || '-' %>
+                                    </td>
+                                    <td
+                                        style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; text-align: right;">
+                                        <%= leave.startDate %>
+                                    </td>
+                                    <td
+                                        style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem; text-align: right;">
+                                        <%= leave.endDate %>
+                                    </td>
+                                    <td
+                                        style="font-size: 0.85rem; color: var(--text-muted); max-width: 320px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5;">
+                                        <%= leave.reason %>
+                                    </td>
+                                    <td
+                                        style="text-align: right; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+                                        <%= leave.actionDate || '-' %>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <% let statusClass='status-default' ; const stat=(leave.status || ''
+                                            ).toLowerCase(); if(stat==='approved' ) statusClass='status-present' ;
+                                            if(stat==='rejected' ) statusClass='status-absent' ; %>
+                                            <span class="status-badge <%= statusClass %>">
+                                                <%= leave.status %>
+                                            </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <div class="table-action-group">
+                                            <form action="/leave/delete/<%= leave.id %>" method="POST" class="inline"
+                                                onsubmit="confirmDelete(this, 'Delete Leave Record', 'This will permanently remove this leave request from history.')">
+                                                <button type="submit" class="btn-action btn-delete" title="Delete">
+                                                    <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                                    <% } else { %>
+                                        <tr data-empty-state="true">
+                                            <td colspan="9"
+                                                style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">
+                                                No history found.</td>
+                                        </tr>
+                                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination-controls"
+                style="padding: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);">
+            </div>
+        </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        if (typeof initTableManagement === 'function') {
+            initTableManagement('#historyTable', '#searchInput', '.pagination-controls', 8, {
+                statusFilterSelector: '#statusFilter'
+            });
+        }
+    });
+</script>

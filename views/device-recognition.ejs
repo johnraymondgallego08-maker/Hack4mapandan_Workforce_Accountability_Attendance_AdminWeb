@@ -1,0 +1,84 @@
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Device Recognition & Security</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Manage and secure authentication hardware
+                across your infrastructure.</p>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div class="card-header">
+                <h3>Authorized Identification Units</h3>
+                <div class="search-wrapper">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="deviceSearch" placeholder="Filter by employee or serial...">
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Employee Name</th>
+                            <th style="width: 40%;">Hardware Serial Code</th>
+                            <th style="text-align: right; width: 30%;">Date & Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (locals.devices && devices.length> 0) { %>
+                            <% devices.forEach(d=> { %>
+                                <tr>
+                                    <td style="font-weight: 700; color: var(--text-heading);">
+                                        <%= d.name %>
+                                    </td>
+                                    <td
+                                        style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; color: var(--accent-primary); background: rgba(124, 58, 237, 0.05); padding: 0.4rem 0.8rem; border-radius: 0.5rem; display: inline-block;">
+                                        <i data-lucide="cpu"
+                                            style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 0.4rem;"></i>
+                                        <%= d.deviceUsage || d.deviceUsed || d.hardwareSerial || 'NOT_FOUND' %>
+                                    </td>
+                                    <td
+                                        style="text-align: right; color: var(--text-heading); font-size: 0.85rem; font-weight: 500;">
+                                        <span style="color: var(--text-muted);">
+                                            <%= d.date %>
+                                        </span>
+                                        <span style="color: var(--accent-primary); margin-left: 0.5rem;">
+                                            <%= d.time %>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                                    <% } else { %>
+                                        <tr>
+                                            <td colspan="3"
+                                                style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">
+                                                No hardware units currently established.</td>
+                                        </tr>
+                                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+
+        const searchInput = document.getElementById('deviceSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase().trim();
+                const tableRows = document.querySelectorAll('tbody tr');
+                tableRows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    if (!row.textContent.includes('No hardware units')) {
+                        row.style.display = text.includes(term) ? '' : 'none';
+                    }
+                });
+            });
+        }
+    });
+</script>

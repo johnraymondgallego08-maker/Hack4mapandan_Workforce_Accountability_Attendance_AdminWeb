@@ -1,0 +1,154 @@
+<div class="page-container">
+    <div class="page-header" style="margin-bottom: 2rem;">
+        <div>
+            <h1>User Profile & Directory</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Manage your account details and view the system-wide employee directory.</p>
+        </div>
+    </div>
+
+    <!-- Profile Section -->
+    <div class="card" style="padding: 2.5rem; margin-bottom: 3rem; background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.05), transparent);">
+        <div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2rem;">
+            <!-- Profile Image Section -->
+            <div class="relative">
+                <div style="width: 140px; height: 140px; border-radius: 50%; overflow: hidden; border: 4px solid var(--border-glass); box-shadow: var(--shadow-glow); background: var(--surface-glass); display: flex; align-items: center; justify-content: center;">
+                    <% if (user.photoUrl || user.profileImage) { %>
+                        <img id="profilePreview" src="<%= user.photoUrl || user.profileImage %>" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">
+                    <% } else { %>
+                        <div style="background: var(--primary-gradient); color: white; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 3.5rem; font-weight: 800;">
+                            <%= user.name ? user.name.charAt(0).toUpperCase() : 'U' %>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- Update Profile Form -->
+            <form action="/update-profile" method="POST" enctype="multipart/form-data" style="width: 100%; max-width: 700px;">
+                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                <div style="display: flex; justify-content: center; margin-bottom: 2.5rem;">
+                    <label for="profileImage" class="btn" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: pointer; border: 1px solid var(--border-glass);">
+                        <i data-lucide="camera" style="width: 16px; height: 16px;"></i>
+                        <span>Change Photo</span>
+                    </label>
+                    <input type="file" id="profileImage" name="profileImage" class="hidden" accept="image/*" onchange="previewAndSubmit(this)">
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Display Name</label>
+                        <input type="text" name="name" value="<%= user.name %>" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Email Address</label>
+                        <input type="email" name="email" value="<%= user.email %>" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Department</label>
+                        <input type="text" name="department" value="<%= user.department || '' %>" placeholder="IT, HR, etc." style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Position</label>
+                        <input type="text" name="position" value="<%= user.position || '' %>" placeholder="Manager, Developer..." style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <label class="label-upper">New Password <span style="font-weight: 400; text-transform: none; opacity: 0.5;">(Leave blank to keep current)</span></label>
+                    <input type="password" name="password" placeholder="••••••••" style="width: 100%;">
+                </div>
+
+                <input type="hidden" name="uid" value="<%= user.id %>">
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-weight: 700; letter-spacing: 0.02em;">
+                    Save Profile Settings
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Directory Section -->
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 2rem;">
+        <div class="card-header">
+            <h3>Employee Directory</h3>
+            <div class="search-wrapper">
+                <i data-lucide="search"></i>
+                <input type="text" id="dirSearchInput" placeholder="Find Employee...">
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Role</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (locals.employees && employees.length > 0) { %>
+                        <% employees.forEach(emp => { %>
+                            <tr>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 2px solid var(--border-glass); background: var(--surface-glass); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                            <% if (emp.profileImage) { %>
+                                                <img src="<%= emp.profileImage %>" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                                            <% } else { %>
+                                                <div style="font-weight: 800; color: var(--text-muted);"><%= emp.name ? emp.name.charAt(0).toUpperCase() : '?' %></div>
+                                            <% } %>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; color: var(--text-heading);"><%= emp.name %></div>
+                                            <div style="font-size: 0.75rem; color: var(--text-muted);"><%= emp.email %></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.9rem;"><%= emp.role %></td>
+                                <td style="color: var(--text-muted); font-size: 0.9rem;"><%= emp.department || '-' %></td>
+                                <td>
+                                    <% let statusClass = emp.status === 'Active' ? 'status-present' : 'status-default'; %>
+                                    <span class="status-badge <%= statusClass %>"><%= emp.status %></span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a href="/users/edit/<%= emp.id %>" class="btn-action" title="Edit">
+                                        <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="5" style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">No employees found.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });
+
+    function previewAndSubmit(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const preview = document.getElementById('profilePreview');
+        if (preview) {
+            preview.src = URL.createObjectURL(file);
+        }
+        input.form.submit();
+    }
+
+    const searchInput = document.getElementById('dirSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('tbody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+    }
+</script>

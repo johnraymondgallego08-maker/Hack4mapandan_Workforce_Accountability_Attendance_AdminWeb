@@ -1,0 +1,350 @@
+<%
+    const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const workforceCount = typeof totalEmployees !== 'undefined' ? totalEmployees : 0;
+    const pendingOvertime = (typeof overtimeRequests !== 'undefined' ? overtimeRequests : []).filter(r => r.status === 'Pending').length;
+    const pendingLeaves = (typeof leaveRequests !== 'undefined' ? leaveRequests : []).filter(r => r.status === 'Pending').length;
+    const payrollEstimate = typeof totalNetPay !== 'undefined' ? totalNetPay : 0;
+    const suspendedCount = typeof suspendedEmployees !== 'undefined' ? suspendedEmployees : 0;
+    const workforcePulse = typeof employeeStatusList !== 'undefined' ? employeeStatusList : [];
+    const activityFeed = typeof recentActivity !== 'undefined' ? recentActivity : [];
+    const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
+%>
+
+<div class="dashboard-shell">
+    <section class="dashboard-hero">
+        <div class="dashboard-hero__intro">
+            <span class="dashboard-hero__eyebrow">Admin Operations Center</span>
+            <h1 class="dashboard-hero__title">System Overview</h1>
+            <p class="dashboard-hero__subtitle">Real-time workforce activity, approvals, payroll visibility, and admin health for <%= todayLabel %>.</p>
+
+            <div class="dashboard-hero__highlights">
+                <div class="dashboard-hero__chip">
+                    <i data-lucide="sparkles"></i>
+                    <span><%= workforceCount %> active records in view</span>
+                </div>
+                <div class="dashboard-hero__chip">
+                    <i data-lucide="shield-check"></i>
+                    <span>Unified admin workflow</span>
+                </div>
+            </div>
+        </div>
+
+        <% if (typeof currentAdmin !== 'undefined' && currentAdmin) { %>
+            <a href="/user-info" class="dashboard-admin-card">
+                <div class="dashboard-admin-card__avatar">
+                    <% if (currentAdmin.photoUrl || currentAdmin.profileImage) { %>
+                        <img src="<%= currentAdmin.photoUrl || currentAdmin.profileImage %>" alt="<%= currentAdmin.name || 'Admin' %>">
+                    <% } else { %>
+                        <span><%= (currentAdmin.name || 'A').charAt(0).toUpperCase() %></span>
+                    <% } %>
+                </div>
+                <div class="dashboard-admin-card__content">
+                    <span class="dashboard-admin-card__label">Signed In As</span>
+                    <strong class="dashboard-admin-card__name"><%= currentAdmin.name || currentAdmin.email || 'Administrator' %></strong>
+                    <span class="dashboard-admin-card__meta"><%= currentAdmin.email || 'Admin Account' %></span>
+                </div>
+                <div class="dashboard-admin-card__action">
+                    <i data-lucide="arrow-up-right"></i>
+                </div>
+            </a>
+        <% } %>
+    </section>
+
+    <section class="dashboard-metrics">
+        <a href="/manage-users" class="metric-card">
+            <div class="metric-card__icon">
+                <i data-lucide="users"></i>
+            </div>
+            <div class="metric-card__content">
+                <span class="metric-card__label">Total Workforce</span>
+                <strong class="metric-card__value"><%= workforceCount %></strong>
+                <span class="metric-card__link">Manage users</span>
+            </div>
+        </a>
+
+        <a href="/manage-overtime" class="metric-card">
+            <div class="metric-card__icon metric-card__icon--blue">
+                <i data-lucide="clock-3"></i>
+            </div>
+            <div class="metric-card__content">
+                <span class="metric-card__label">Overtime Requests</span>
+                <strong class="metric-card__value"><%= pendingOvertime %></strong>
+                <span class="metric-card__link">Review queue</span>
+            </div>
+        </a>
+
+        <a href="/manage-leave" class="metric-card">
+            <div class="metric-card__icon metric-card__icon--amber">
+                <i data-lucide="calendar-days"></i>
+            </div>
+            <div class="metric-card__content">
+                <span class="metric-card__label">Pending Leaves</span>
+                <strong class="metric-card__value"><%= pendingLeaves %></strong>
+                <span class="metric-card__link">Open calendar</span>
+            </div>
+        </a>
+
+        <a href="/manage-payroll" class="metric-card">
+            <div class="metric-card__icon metric-card__icon--green">
+                <i data-lucide="banknote"></i>
+            </div>
+            <div class="metric-card__content">
+                <span class="metric-card__label">Payroll Estimate</span>
+                <strong class="metric-card__value">₱<%= payrollEstimate.toLocaleString() %></strong>
+                <span class="metric-card__link">View ledger</span>
+            </div>
+        </a>
+
+        <a href="/manage-users" class="metric-card">
+            <div class="metric-card__icon metric-card__icon--red">
+                <i data-lucide="user-x"></i>
+            </div>
+            <div class="metric-card__content">
+                <span class="metric-card__label">Suspended Employees</span>
+                <strong class="metric-card__value"><%= suspendedCount %></strong>
+                <span class="metric-card__link">Review accounts</span>
+            </div>
+        </a>
+    </section>
+
+    <section class="dashboard-main">
+        <div class="dashboard-panel dashboard-panel--pulse">
+            <div class="card-header">
+                <h3>Today's Pulse</h3>
+                <a href="/attendance-monitor" class="dashboard-panel__cta">Full activity</a>
+            </div>
+
+            <div class="pulse-list">
+                <% workforcePulse.forEach(employee => { %>
+                    <% 
+                        let pulseStatusClass = 'status-absent';
+                        const pulseStatus = String(employee.status || '').toLowerCase();
+                        if (pulseStatus.includes('present') || pulseStatus.includes('active') || pulseStatus.includes('timed in')) pulseStatusClass = 'status-present';
+                        if (pulseStatus.includes('late')) pulseStatusClass = 'status-late';
+                        if (pulseStatus.includes('leave')) pulseStatusClass = 'status-leave';
+                        if (pulseStatus.includes('overtime')) pulseStatusClass = 'status-overtime';
+                    %>
+                    <div class="pulse-item">
+                        <div class="person-pill">
+                            <div class="person-pill__avatar">
+                                <% if (employee.photoUrl) { %>
+                                    <img src="<%= employee.photoUrl %>" alt="<%= employee.name %>">
+                                <% } else { %>
+                                    <span><%= employee.name.charAt(0).toUpperCase() %></span>
+                                <% } %>
+                            </div>
+                            <div class="person-pill__content">
+                                <strong><%= employee.name %></strong>
+                                <span><%= employee.status %> today</span>
+                            </div>
+                        </div>
+                        <span class="status-badge <%= pulseStatusClass %>">
+                            <%= employee.status %>
+                        </span>
+                    </div>
+                <% }) %>
+
+                <% if (!workforcePulse || workforcePulse.length === 0) { %>
+                    <div class="dashboard-empty-state">No employee status activity available.</div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="dashboard-panel dashboard-panel--analytics">
+            <div class="card-header">
+                <h3>System Analytics</h3>
+                <div class="dashboard-live-badge">
+                    <span class="dashboard-live-badge__dot"></span>
+                    Live Data
+                </div>
+            </div>
+
+            <div class="analytics-grid">
+                <div class="analytics-card">
+                    <div class="analytics-card__header">
+                        <span>Workforce Participation</span>
+                    </div>
+                    <div class="analytics-card__canvas">
+                        <canvas id="attendanceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="analytics-card">
+                    <div class="analytics-card__header">
+                        <span>Weekly Overtime Yield</span>
+                    </div>
+                    <div class="analytics-card__canvas">
+                        <canvas id="overtimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="dashboard-secondary">
+        <div class="dashboard-panel dashboard-panel--activity">
+            <div class="card-header">
+                <h3>Recent Activity</h3>
+                <div class="filter-group">
+                    <div class="search-wrapper">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="activitySearch" placeholder="Search logs...">
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0;">
+                <table id="recentActivityTable">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Log Time</th>
+                            <th style="text-align: right;">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% activityFeed.slice(0, 8).forEach(record => { %>
+                            <tr>
+                                <td>
+                                    <div class="person-pill">
+                                        <div class="person-pill__avatar person-pill__avatar--small">
+                                            <% if (record.photoUrl) { %>
+                                                <img src="<%= record.photoUrl %>" alt="<%= record.name %>">
+                                            <% } else { %>
+                                                <span><%= record.name.charAt(0).toUpperCase() %></span>
+                                            <% } %>
+                                        </div>
+                                        <div class="person-pill__content">
+                                            <strong><%= record.name %></strong>
+                                            <span><%= record.type %></span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="font-mono" style="color: var(--primary); font-weight: 700;"><%= record.timeIn %></td>
+                                <td style="text-align: right; color: var(--text-muted); font-size: 0.85rem;"><%= record.date %></td>
+                            </tr>
+                        <% }) %>
+
+                        <% if (!activityFeed || activityFeed.length === 0) { %>
+                            <tr>
+                                <td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-muted); font-style: italic;">
+                                    No recent activity found.
+                                </td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="dashboard-panel dashboard-panel--holidays">
+            <div class="card-header">
+                <h3>Upcoming Holidays</h3>
+            </div>
+
+            <div class="holiday-list">
+                <% if (upcomingHolidays.length > 0) { %>
+                    <% upcomingHolidays.forEach(holiday => { %>
+                        <div class="holiday-item">
+                            <div class="holiday-item__date">
+                                <span><%= holiday.monthLabel || 'N/A' %></span>
+                                <strong><%= holiday.dayLabel || '00' %></strong>
+                            </div>
+                            <div class="holiday-item__content">
+                                <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
+                                <span><%= holiday.type || 'Holiday' %></span>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="dashboard-empty-state">No upcoming holidays found.</div>
+                <% } %>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('activitySearch');
+        const tableRows = document.querySelectorAll('#recentActivityTable tbody tr');
+
+        const ctx1 = document.getElementById('attendanceChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: ['Active', 'On Leave', 'Absent'],
+                datasets: [{
+                    data: [85, 10, 5],
+                    backgroundColor: ['#7c3aed', '#c084fc', '#e4def8'],
+                    hoverOffset: 14,
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '78%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#756f86',
+                            usePointStyle: true,
+                            padding: 18,
+                            font: { family: 'Outfit', size: 11, weight: '700' }
+                        }
+                    }
+                }
+            }
+        });
+
+        const ctx2 = document.getElementById('overtimeChart').getContext('2d');
+        const gradient = ctx2.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, '#6d28d9');
+        gradient.addColorStop(1, '#c4b5fd');
+
+        new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                datasets: [{
+                    label: 'Overtime Hours',
+                    data: [4, 7, 5, 12, 8, 3],
+                    backgroundColor: gradient,
+                    borderRadius: 12,
+                    barThickness: 16
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(109, 40, 217, 0.08)', drawBorder: false },
+                        ticks: { color: '#756f86', font: { family: 'Outfit', weight: '600' } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#5b5670', font: { family: 'Outfit', weight: '700' } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('keyup', (e) => {
+                const term = e.target.value.toLowerCase();
+                tableRows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+    });
+</script>

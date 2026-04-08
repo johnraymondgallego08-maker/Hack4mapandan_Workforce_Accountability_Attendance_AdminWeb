@@ -1,0 +1,88 @@
+<div class="auth-container">
+    <div style="text-align: center; margin-bottom: 2.5rem;">
+        <h1 style="margin-bottom: 0.5rem;">Admin</h1>
+    </div>
+
+    <form id="login-form" method="POST" action="/login" novalidate>
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <div id="error-message" class="alert alert-danger" style="display: none; margin-bottom: 1.5rem;"></div>
+        <div id="attempt-info"
+            style="display: none; text-align: center; margin-bottom: 1rem; font-size: 0.85rem; color: var(--accent-error); font-weight: 800; background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(239, 68, 68, 0.2);">
+        </div>
+
+        <div style="position: relative;">
+            <i data-lucide="mail"
+                style="position: absolute; left: 1rem; top: 1rem; color: var(--text-muted); width: 18px; height: 18px;"></i>
+            <input type="email" id="email" name="email" placeholder="Email Address" required
+                style="padding-left: 3rem !important;">
+        </div>
+
+        <div style="position: relative;">
+            <i data-lucide="lock"
+                style="position: absolute; left: 1rem; top: 1rem; color: var(--text-muted); width: 18px; height: 18px;"></i>
+            <input type="password" id="password" name="password" placeholder="Password" required
+                style="padding-left: 3rem !important;">
+        </div>
+
+        <button type="submit" id="login-button" style="width: 100%; margin-top: 1rem;">
+            <span>Login to Dashboard</span>
+            <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
+        </button>
+    </form>
+</div>
+
+<script>
+    // Re-initialize icons for the login page specifically
+    lucide.createIcons();
+
+    const loginForm = document.getElementById('login-form');
+    const loginButton = document.getElementById('login-button');
+    const errorMessageDiv = document.getElementById('error-message');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        loginButton.disabled = true;
+        loginButton.querySelector('span').textContent = 'Authenticating...';
+        errorMessageDiv.style.display = 'none';
+
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+            const idToken = await userCredential.user.getIdToken();
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || document.querySelector('input[name="_csrf"]')?.value || '';
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ idToken: idToken, _csrf: csrfToken }),
+            });
+
+            if (response.ok) {
+                window.location.href = '/';
+            } else {
+                const errorData = await response.json();
+                if (errorData.failedAttempts) {
+                    const info = document.getElementById('attempt-info');
+                    info.textContent = `Security Check: Attempt ${errorData.failedAttempts} of 10`;
+                    info.style.display = 'block';
+                }
+                if (errorData.retryAfter) {
+                    const info = document.getElementById('attempt-info');
+                    info.textContent = `Security cooldown active. Try again in ${Math.ceil(errorData.retryAfter / 60)} minute(s).`;
+                    info.style.display = 'block';
+                }
+                throw new Error(errorData.error || 'Server validation failed.');
+            }
+        } catch (error) {
+            errorMessageDiv.textContent = error.message;
+            errorMessageDiv.style.display = 'block';
+            loginButton.disabled = false;
+            loginButton.querySelector('span').textContent = 'Login to Dashboard';
+        }
+    });
+</script>

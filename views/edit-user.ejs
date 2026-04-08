@@ -1,0 +1,179 @@
+<div class="page-container" style="max-width: 600px; margin: 0 auto;">
+    <div class="page-header" style="margin-bottom: 2rem; text-align: center;">
+        <div>
+            <h1>Edit User: <%= userToEdit.name %>
+            </h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Modify system user details and access permissions.
+            </p>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 2.5rem;">
+        <form action="/users/edit/<%= userToEdit.id %>" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <!-- Profile Photo Upload -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 2rem;">
+                <div
+                    style="width: 100px; height: 100px; border-radius: 50%; overflow: hidden; border: 3px solid var(--border-glass); margin-bottom: 1rem; background: var(--surface-glass); display: flex; align-items: center; justify-content: center;">
+                    <% if (userToEdit.photoUrl || userToEdit.profileImage) { %>
+                        <img id="editPhotoPreview" src="<%= userToEdit.photoUrl || userToEdit.profileImage %>"
+                            style="width: 100%; height: 100%; object-fit: cover;">
+                        <% } else { %>
+                            <span id="editPhotoPreview"
+                                style="font-size: 2.5rem; font-weight: 800; color: white; background: var(--primary-gradient); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                <%= userToEdit.name ? userToEdit.name.charAt(0).toUpperCase() : '?' %>
+                            </span>
+                            <% } %>
+                </div>
+                <label for="profileImage" class="btn"
+                    style="font-size: 0.75rem; padding: 0.4rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <i data-lucide="camera" style="width: 14px; height: 14px;"></i>
+                    <span>Change Photo</span>
+                </label>
+                <input type="file" id="profileImage" name="profileImage" style="display: none;" accept="image/*"
+                    onchange="document.getElementById('editPhotoPreview').src=URL.createObjectURL(this.files[0])">
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label for="name"
+                    style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Full
+                    Name</label>
+                <div style="position: relative;">
+                    <i data-lucide="user"
+                        style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                    <input type="text" name="name" id="name" value="<%= userToEdit.name %>" required
+                        style="width: 100%; padding-left: 3rem;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label for="email"
+                    style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Email
+                    Address</label>
+                <div style="position: relative;">
+                    <i data-lucide="mail"
+                        style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                    <input type="email" name="email" id="email" value="<%= userToEdit.email %>" required
+                        style="width: 100%; padding-left: 3rem;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                <div>
+                    <label for="role"
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Role</label>
+                    <div style="position: relative;">
+                        <i data-lucide="shield"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                        <select name="role" id="role" style="width: 100%; padding-left: 3rem;">
+                            <option value="employee" <%=userToEdit.role==='employee' ? 'selected' : '' %>>Employee
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="status"
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Status</label>
+                    <div style="position: relative;">
+                        <i data-lucide="check-circle"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                        <select name="status" id="status" style="width: 100%; padding-left: 3rem;">
+                            <option value="Active" <%= String(userToEdit.status || '').toLowerCase()==='active' ? 'selected' : '' %>>Active</option>
+                            <option value="Suspended" <%= String(userToEdit.status || '').toLowerCase()==='suspended' ? 'selected' : '' %>>Suspended
+                            </option>
+                            <option value="Inactive" <%= String(userToEdit.status || '').toLowerCase()==='inactive' ? 'selected' : '' %>>Inactive
+                            </option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                <div>
+                    <label
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Department</label>
+                    <input type="text" name="department" value="<%= userToEdit.department || '' %>"
+                        placeholder="IT, HR, Finance..." style="width: 100%;">
+                </div>
+                <div>
+                    <label
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Position</label>
+                    <input type="text" name="position" value="<%= userToEdit.position || '' %>"
+                        placeholder="Manager, Developer..." style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                <div>
+                    <label for="employmentStatus"
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Employee
+                        Status</label>
+                    <div style="position: relative;">
+                        <i data-lucide="briefcase-business"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                        <select name="employmentStatus" id="employmentStatus" style="width: 100%; padding-left: 3rem;">
+                            <option value="">Select employee status</option>
+                            <option value="Regular" <%= ['regular', 'full-time regular', 'full time regular'].includes(String(userToEdit.employmentStatus || '').toLowerCase()) ? 'selected' : '' %>>Regular</option>
+                            <option value="Part-Time" <%= ['part-time', 'part time', 'partime'].includes(String(userToEdit.employmentStatus || '').toLowerCase()) ? 'selected' : '' %>>Part-Time</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="supervisor"
+                        style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Supervisor</label>
+                    <div style="position: relative;">
+                        <i data-lucide="users"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                        <input type="text" name="supervisor" id="supervisor" value="<%= userToEdit.supervisor || '' %>"
+                            placeholder="Engr. Ayro" style="width: 100%; padding-left: 3rem;">
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label for="workSchedule"
+                    style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Work
+                    Schedule</label>
+                <div style="position: relative;">
+                    <i data-lucide="clock-3"
+                        style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
+                    <select name="workSchedule" id="workSchedule" style="width: 100%; padding-left: 3rem;">
+                        <option value="">Select work schedule</option>
+                        <option value="08:00 AM - 05:00 PM" <%= String(userToEdit.workSchedule || '') === '08:00 AM - 05:00 PM' ? 'selected' : '' %>>08:00 AM - 05:00 PM</option>
+                        <option value="09:00 AM - 06:00 PM" <%= String(userToEdit.workSchedule || '') === '09:00 AM - 06:00 PM' ? 'selected' : '' %>>09:00 AM - 06:00 PM</option>
+                        <% if (userToEdit.workSchedule && !['08:00 AM - 05:00 PM', '09:00 AM - 06:00 PM'].includes(String(userToEdit.workSchedule))) { %>
+                            <option value="<%= userToEdit.workSchedule %>" selected><%= userToEdit.workSchedule %></option>
+                        <% } %>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label
+                    style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">New
+                    Password <span style="opacity:0.5; font-weight: 400; text-transform: none;">(leave blank to keep
+                        current)</span></label>
+                <input type="password" name="password" placeholder="••••••••" style="width: 100%;">
+            </div>
+
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-primary"
+                    style="flex: 1; padding: 1rem; font-weight: 800; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <i data-lucide="save" style="width: 18px; height: 18px;"></i>
+                    <span>UPDATE USER</span>
+                </button>
+                <a href="/manage-users" class="btn"
+                    style="flex: 1; padding: 1rem; font-weight: 800; letter-spacing: 0.05em; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-glass); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <span>CANCEL</span>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+    });
+</script>
