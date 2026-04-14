@@ -25,6 +25,8 @@
                     <tr>
                         <th data-sortable="true">User</th>
                         <th data-sortable="true">Role</th>
+                        <th>Department</th>
+                        <th>Position</th>
                         <th data-sortable="true">Employee Status</th>
                         <th>Work Schedule</th>
                         <th>Supervisor</th>
@@ -61,6 +63,12 @@
                                     style="background: rgba(255,255,255,0.05); color: var(--text-muted); padding: 0.25rem 0.75rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                                     <%= user.role || 'N/A' %>
                                 </span>
+                            </td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                <%= user.department || '-' %>
+                            </td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                <%= user.position || '-' %>
                             </td>
                             <td>
                                 <span

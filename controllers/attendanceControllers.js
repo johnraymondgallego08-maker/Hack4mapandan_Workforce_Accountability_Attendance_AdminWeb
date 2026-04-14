@@ -267,7 +267,7 @@ function isOpenShiftOvertime(record, referenceTime = new Date()) {
     if (hasTimeOut) return false;
 
     const workedHours = calculateWorkedHours(record, referenceTime);
-    return workedHours !== null && workedHours > 8;
+    return workedHours !== null && workedHours > 9;
 }
 
 function calculateAttendanceStatus(record, leaveRequests, overtimeRequests = []) {
@@ -533,7 +533,7 @@ exports.attendanceMonitor = async (req, res) => {
             if (timeInDate > shiftStart) dailyStatus = 'Late';
         }
 
-        // 2. Check Overtime (> 8 Hours)
+        // 2. Check Overtime (> 9 Hours)
         let hoursWorked = '-';
         const start = parseDate(record.timeIn);
         const end = parseDate(record.timeOut);
@@ -544,7 +544,7 @@ exports.attendanceMonitor = async (req, res) => {
             const hours = diff / (1000 * 60 * 60);
             hoursWorked = hours.toFixed(2) + ' hrs';
 
-            if (hours > 8) {
+            if (hours > 9) {
                 dailyStatus = 'Overtime';
                 // Auto-add to overtime collection if not already there
                 try {
@@ -554,9 +554,9 @@ exports.attendanceMonitor = async (req, res) => {
                             employeeId: empId,
                             employeeName: employeeName,
                             date: record.timeIn || record.timestamp,
-                            hours: (hours - 8).toFixed(2),
+                            hours: (hours - 9).toFixed(2),
                             status: 'Pending',
-                            reason: 'Automatic System Capture (>8h)'
+                            reason: 'Automatic System Capture (>9h)'
                         });
                         overtimeRequests.push(overtimeEntry);
                     }
@@ -576,9 +576,9 @@ exports.attendanceMonitor = async (req, res) => {
                         employeeId: empId,
                         employeeName: employeeName,
                         date: record.timeIn || record.timestamp,
-                        hours: (hours - 8).toFixed(2),
+                        hours: (hours - 9).toFixed(2),
                         status: 'Pending',
-                        reason: 'Automatic System Capture (no clock-out past 8h)'
+                        reason: 'Automatic System Capture (no clock-out past 9h)'
                     });
                     overtimeRequests.push(overtimeEntry);
                 }
@@ -609,13 +609,21 @@ exports.attendanceMonitor = async (req, res) => {
         };
     }));
 
-    // Filter by search query if present
+    // Filter by query parameters: prefer employeeId for exact matches, fall back to search
     let filteredAttendance = attendanceWithStatus;
-    if (req.query.search) {
-        const searchTerm = req.query.search.toLowerCase();
+    if (req.query.employeeId) {
+        const empId = String(req.query.employeeId || '').trim().toLowerCase();
+        if (empId) {
+            filteredAttendance = attendanceWithStatus.filter(record => {
+                const rEmpId = String(record.employeeId || record.userId || '').trim().toLowerCase();
+                return rEmpId && rEmpId === empId;
+            });
+        }
+    } else if (req.query.search) {
+        const searchTerm = String(req.query.search || '').toLowerCase().trim();
         filteredAttendance = attendanceWithStatus.filter(record =>
-            (record.name && record.name.toLowerCase().includes(searchTerm)) ||
-            (record.date && record.date.includes(searchTerm))
+            (record.name && String(record.name).toLowerCase().includes(searchTerm)) ||
+            (record.date && String(record.date).toLowerCase().includes(searchTerm))
         );
     }
 
@@ -811,5 +819,123 @@ exports.imageRecognition = async (req, res) => {
     } catch (error) {
         console.error("[IMAGE RECOGNITION] Error:", error);
         res.status(500).send("Error loading image recognition data.");
+    }
+};
+
+exports.attendanceSummaryEmployee = async (req, res) => {
+    try {
+        const empId = req.query.employeeId;
+        if (!empId) {
+            req.flash('error', 'Employee ID is required.');
+            return res.redirect('/attendance-monitor');
+        }
+
+        const [attendance, users, leaveRequests, overtimeRequests] = await Promise.all([
+            attendanceModel.getAllAttendance(),
+            userModel.getEmployeeUsers(),
+            leaveModel.getAll(),
+            overtimeModel.getAll()
+        ]);
+
+        const user = users.find(u => String(u.id || u.uid) === String(empId));
+        const employeeName = user ? user.name : 'Unknown Employee';
+
+        const employeeRecords = attendance
+            .filter(r => String(r.employeeId || r.userId) === String(empId))
+            .sort((a, b) => (parseDate(b.timestamp || b.timeIn) || 0) - (parseDate(a.timestamp || a.timeIn) || 0));
+
+        const uniqueRecords = [];
+        let lastProcessedTs = null;
+
+        for (const record of employeeRecords) {
+            const ts = parseDate(record.timestamp || record.timeIn);
+            if (ts && lastProcessedTs && Math.abs(lastProcessedTs - ts) < 60000) continue;
+            uniqueRecords.push(record);
+            lastProcessedTs = ts;
+        }
+
+        // ✅ FIXED DECLARATIONS
+        let totalWorkingHours = 0;
+        let totalOfficeHours = 0;
+        let lateDaysCount = 0;
+        let totalLateMins = 0;
+
+        const uniqueDates = new Set();
+        const lateDates = new Set();
+
+        const now = new Date();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+        const processedRecords = uniqueRecords.map(record => {
+            const timeIn = parseDate(record.timeIn);
+            let lateInfo = '-';
+
+            if (timeIn) {
+                const dateKey = timeIn.toDateString();
+
+                if (!uniqueDates.has(dateKey)) {
+                    uniqueDates.add(dateKey);
+                    totalOfficeHours += 9; // ✅ only once per unique day
+                }
+
+                const shiftStart = new Date(timeIn);
+                shiftStart.setHours(8, 0, 0, 0);
+
+                if (timeIn > shiftStart) {
+                    if (!lateDates.has(dateKey)) {
+                        lateDates.add(dateKey);
+                        lateDaysCount++;
+                    }
+
+                    const diffMins = Math.floor((timeIn - shiftStart) / 60000);
+                    totalLateMins += diffMins;
+
+                    const h = Math.floor(diffMins / 60);
+                    const m = diffMins % 60;
+                    lateInfo = h > 0 ? `${h}h ${m}m late` : `${m}m late`;
+                }
+            }
+
+            const actualWorked = calculateWorkedHours(record) || 0;
+            totalWorkingHours += actualWorked;
+
+            return {
+                ...record,
+                date: formatDate(record.timestamp || record.timeIn),
+                timeIn: formatTime(record.timeIn),
+                timeOut: formatTime(record.timeOut),
+                hoursWorked: actualWorked.toFixed(2) + ' hrs',
+                lateInfo,
+                status: calculateAttendanceStatus(record, leaveRequests, overtimeRequests)
+            };
+        });
+
+        const presentDaysCount = uniqueDates.size;
+
+        // ✅ FINAL CALCULATIONS
+        const totalLateH = Math.floor(totalLateMins / 60);
+        const totalLateM = totalLateMins % 60;
+        const totalLateStr = totalLateH > 0 ? `${totalLateH}h ${totalLateM}m` : `${totalLateM}m`;
+
+        const totalWorkingMins = Math.round(totalWorkingHours * 60);
+        const workedH = Math.floor(totalWorkingMins / 60);
+        const workedM = totalWorkingMins % 60;
+
+        const workedPercent = totalOfficeHours > 0
+            ? ((totalWorkingHours / totalOfficeHours) * 100).toFixed(2)
+            : "0.00";
+
+        res.render('attendance-summary-employee', {
+            employeeName,
+            totalOfficeTime: totalOfficeHours + ' hrs', // ✅ fixed duplicate
+            totalWorkingTime: `${workedH} hrs ${workedM} mins (${workedPercent}%)`,
+            presentDays: `${presentDaysCount} / ${daysInMonth} Days`,
+            lateDays: `${lateDaysCount} Days (${totalLateStr})`,
+            records: processedRecords
+        });
+
+    } catch (error) {
+        console.error("[SUMMARY ERROR]:", error);
+        res.status(500).send("Error generating employee attendance summary.");
     }
 };

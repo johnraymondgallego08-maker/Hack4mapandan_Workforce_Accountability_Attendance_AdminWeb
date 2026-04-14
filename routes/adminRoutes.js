@@ -36,12 +36,22 @@ router.post("/leave/approve/:id", adminMiddleware.isAdmin, leaveController.appro
 router.post("/leave/reject/:id", adminMiddleware.isAdmin, leaveController.rejectLeave);
 router.post("/leave/delete/:id", adminMiddleware.isAdmin, leaveController.deleteLeave);
 router.get("/manage-payroll", adminMiddleware.isAdmin, payrollController.managePayroll);
+// Debug endpoint to scan payroll documents and report available months (admin-only)
+router.get('/debug/payroll-scan', adminMiddleware.isAdmin, payrollController.debugPayrollScan);
+// Dev-only payroll scan (enabled when ALLOW_DEV_DEBUG=true)
+router.get('/dev/payroll-scan', async (req, res) => {
+    if (process.env.ALLOW_DEV_DEBUG === 'true') {
+        return payrollController.debugPayrollScan(req, res);
+    }
+    res.status(403).send('Dev debug endpoints are disabled. Set ALLOW_DEV_DEBUG=true to enable.');
+});
 router.get("/payroll/edit/:id", adminMiddleware.isAdmin, payrollController.editPayrollPage);
 router.post("/payroll/edit/:id", adminMiddleware.isAdmin, payrollController.updatePayroll);
 router.post("/payroll/delete/:id", adminMiddleware.isAdmin, payrollController.deletePayroll);
 router.post("/payroll/process/:id", adminMiddleware.isAdmin, payrollController.processPayroll);
 
 router.get("/attendance-monitor", adminMiddleware.isAdmin, attendanceController.attendanceMonitor);
+router.get("/attendance/summary", adminMiddleware.isAdmin, attendanceController.attendanceSummaryEmployee);
 router.get("/attendance/add", adminMiddleware.isAdmin, attendanceController.addAttendancePage);
 router.post("/attendance/add", adminMiddleware.isAdmin, attendanceController.storeAttendance);
 

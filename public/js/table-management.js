@@ -59,6 +59,25 @@
         const dataRows = allRows.filter((row) => !isEmptyStateRow(row));
         const headers = Array.from(table.querySelectorAll('thead th'));
 
+        // If the server-side template did not include an explicit empty-state row,
+        // create one so that search/status/date filtering shows a "No records found" message.
+        const emptyMessage = options.emptyMessage || 'No records found.';
+        if (emptyStateRows.length === 0) {
+            const colCount = headers.length || (allRows[0] ? allRows[0].children.length : 1);
+            const emptyTr = document.createElement('tr');
+            emptyTr.dataset.emptyState = 'true';
+            const td = document.createElement('td');
+            td.colSpan = colCount;
+            td.style.padding = '3rem';
+            td.style.textAlign = 'center';
+            td.style.color = 'var(--text-muted)';
+            td.style.fontStyle = 'italic';
+            td.textContent = emptyMessage;
+            emptyTr.appendChild(td);
+            tbody.appendChild(emptyTr);
+            emptyStateRows.push(emptyTr);
+        }
+
         let filteredRows = [...dataRows];
         let currentPage = 1;
         let currentSortColumn = null;

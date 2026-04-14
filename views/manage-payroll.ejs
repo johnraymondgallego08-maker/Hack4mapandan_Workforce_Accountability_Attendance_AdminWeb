@@ -17,17 +17,17 @@
                         <% const months=["January", "February" , "March" , "April" , "May" , "June" , "July" , "August"
                             , "September" , "October" , "November" , "December" ]; %>
                             <% months.forEach((monthName, index)=> { %>
-                                <option value="<%= index %>" <%=locals.selectedMonth==index ? 'selected' : '' %>>
-                                    <%= monthName %>
-                                </option>
-                                <% }); %>
+                                    <option value="<%= index %>" <%= selectedMonth==index ? 'selected' : '' %>>
+                                        <%= monthName %>
+                                    </option>
+                                    <% }); %>
                     </select>
                 </div>
                 <div style="width: 1px; height: 20px; background: var(--border-glass);"></div>
                 <select name="year" onchange="this.form.submit()" class="btn"
                     style="background: transparent; color: var(--text-heading); border: none; padding: 0.25rem; cursor: pointer; font-weight: 600; outline: none;">
                     <% const startYear=2024; const endYear=2028; for(let yr=startYear; yr <=endYear; yr++) { %>
-                        <option value="<%= yr %>" <%=locals.selectedYear==yr ? 'selected' : '' %>><%= yr %>
+                        <option value="<%= yr %>" <%= selectedYear==yr ? 'selected' : '' %>><%= yr %>
                         </option>
                         <% } %>
                 </select>
@@ -409,5 +409,22 @@
                 toggleBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
             });
         });
+
+        // Ensure month/year selection always navigates and updates server-rendered table
+        const payrollForm = document.querySelector('.payroll-filters form');
+        if (payrollForm) {
+            const monthSelect = payrollForm.querySelector('select[name="month"]');
+            const yearSelect = payrollForm.querySelector('select[name="year"]');
+            const navigate = () => {
+                const month = monthSelect ? monthSelect.value : '<%= selectedMonth %>';
+                const year = yearSelect ? yearSelect.value : '<%= selectedYear %>';
+                const params = new URLSearchParams(window.location.search);
+                params.set('month', month);
+                params.set('year', year);
+                window.location.search = params.toString();
+            };
+            if (monthSelect) monthSelect.addEventListener('change', navigate);
+            if (yearSelect) yearSelect.addEventListener('change', navigate);
+        }
     });
 </script>

@@ -690,6 +690,34 @@ img {
     min-width: 0;
 }
 
+/* Ensure tables inside .table-responsive truly adapt on small screens
+   - Force width:100% and allow cells to wrap on narrow viewports
+   - Keep nowrap on larger screens to preserve table readability */
+.table-responsive table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto;
+}
+
+.table-responsive th,
+.table-responsive td {
+    /* default keep nowrap for desktop, overridden on small screens */
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .table-responsive th,
+    .table-responsive td {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
 table {
     width: max(100%, var(--table-min-width, 780px));
     min-width: var(--table-min-width, 780px);

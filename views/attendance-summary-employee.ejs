@@ -1,0 +1,109 @@
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <a href="/attendance-monitor" style="color: var(--text-muted);"><i data-lucide="arrow-left" style="width: 20px;"></i></a>
+                <h1>Attendance Summary</h1>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Detailed performance report for <strong><%= employeeName %></strong></p>
+        </div>
+    </div>
+
+    <!-- Stats Card Grid -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="card stat-card">
+            <span class="stat-label">Present Days</span>
+            <span class="stat-value"><%= locals.presentDays || '0/30 Days' %></span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Total Office Time</span>
+            <span class="stat-value"><%= locals.totalOfficeTime || '0 hrs' %></span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Total Worked Time</span>
+            <span class="stat-value" style="font-size: 1.15rem;"><%= locals.totalWorkingTime || '0 hrs' %></span>
+        </div>
+        <div class="card stat-card" style="border-left: 4px solid #f59e0b;">
+            <span class="stat-label">Late Days & Total Late Time</span>
+            <span class="stat-value" style="color: #f59e0b; font-size: 1.15rem;"><%= locals.lateDays || '0 Days' %></span>
+        </div>
+    </div>
+
+    <div class="card attendance-card">
+        <div class="card-header">
+            <h3>Detailed History</h3>
+        </div>
+
+        <div class="table-responsive attendance-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time In</th>
+                        <th>Time Out</th>
+                        <th class="text-center">Hours Worked</th>
+                        <th>Date</th>
+                        <th style="text-align: right;">Daily Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (locals.records && records.length > 0) { %>
+                        <% records.forEach(record => { %>
+                            <tr>
+                                <td class="mono-text accent-info"><%= record.timeIn || 'N/A' %></td>
+                                <td class="mono-text accent-info"><%= record.timeOut || 'N/A' %></td>
+                                <td class="text-center mono-text hours-col"><%= record.hoursWorked %></td>
+                                <td class="date-col" style="font-weight: 600;"><%= record.date %></td>
+                                <td style="text-align: right;">
+                                    <% if (record.lateInfo !== '-') { %>
+                                        <span style="color: #f59e0b; font-size: 0.85rem; font-weight: 500;">
+                                            <i data-lucide="clock-alert" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>
+                                            <%= record.lateInfo %>
+                                        </span><br>
+                                    <% } %>
+                                    <% 
+                                       const getStatusClass = (s) => {
+                                           const stat = (s || '').toLowerCase();
+                                           if(stat.includes('late')) return 'status-late';
+                                           if(stat.includes('absent') || stat.includes('rejected')) return 'status-absent';
+                                           if(stat.includes('leave')) return 'status-leave';
+                                           if(stat.includes('overtime')) return 'status-overtime';
+                                           if(stat.includes('present') || stat.includes('active') || stat.includes('timed in')) return 'status-present';
+                                           return 'status-default';
+                                       };
+                                    %>
+                                    <span class="status-badge <%= getStatusClass(record.status) %>">
+                                        <%= record.status || 'Present' %>
+                                    </span>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="5" style="padding: 3rem; text-align: center; color: var(--text-muted);">No records found.</td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+    });
+</script>
+
+<style>
+    .stat-card { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    .stat-label { color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; }
+    .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--text-heading); }
+    
+    .attendance-card { padding: 0; overflow: hidden; border-radius: 1.5rem; }
+    .attendance-table-container { margin-top: 0; border: none; border-radius: 0; }
+    .mono-text { font-family: monospace; }
+    .accent-info { color: var(--accent-info); }
+    .hours-col { font-weight: 700; color: var(--text-muted); }
+    .date-col { white-space: nowrap; color: var(--text-heading); }
+    .status-late { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+</style>

@@ -244,9 +244,21 @@ exports.managePayroll = async (req, res) => {
             return null;
         };
 
-        // 1. Current Selection (Default to March 2026 context)
-        const y = req.query.year ? parseInt(req.query.year) : 2026;
-        const m = req.query.month !== undefined ? parseInt(req.query.month) : 2;
+        // 1. Current Selection — default to today's year/month when not provided
+        const now = new Date();
+        const defaultYear = now.getFullYear();
+        const defaultMonth = now.getMonth(); // 0-indexed
+
+        let y = req.query.year !== undefined ? parseInt(req.query.year, 10) : defaultYear;
+        if (Number.isNaN(y)) y = defaultYear;
+
+        let m;
+        if (req.query.month !== undefined) {
+            m = parseInt(req.query.month, 10);
+            if (Number.isNaN(m) || m < 0 || m > 11) m = defaultMonth;
+        } else {
+            m = defaultMonth;
+        }
 
         // 2. Map existing records into a lookup map using EmployeeId + Year + Month + Period index
         const existingMap = new Map();
@@ -286,12 +298,51 @@ exports.managePayroll = async (req, res) => {
             };
         });
 
+        // Enable optional debug logging by setting DEBUG_PAYROLL_MATCH=1 in your environment
+        const debugPayroll = !!process.env.DEBUG_PAYROLL_MATCH;
+
+        // Index existing payroll records by several possible identifiers so matching is resilient
         processedDatabaseRecords.forEach(p => {
-            if (p.employeeId && p.year === y && p.month === m) {
-                const key = `${buildPayrollKey(p.employeeId)}-${p.pIdx}`;
-                existingMap.set(key, p);
-            }
+            if (p.year !== y || p.month !== m) return;
+
+            const candidateIds = new Set();
+            if (p.employeeId) candidateIds.add(buildPayrollKey(p.employeeId));
+            if (p.parentEmployeeId) candidateIds.add(buildPayrollKey(p.parentEmployeeId));
+            if (p.employeeCode) candidateIds.add(buildPayrollKey(p.employeeCode));
+            if (p.userId) candidateIds.add(buildPayrollKey(p.userId));
+
+            // Also include any id-like fields found in the document
+            ['id', 'payrollId', 'payroll_id'].forEach(k => {
+                if (p[k]) candidateIds.add(buildPayrollKey(p[k]));
+            });
+
+            candidateIds.forEach(cid => {
+                if (!cid) return;
+                const key = `${cid}-${p.pIdx}`;
+                // Prefer existing explicit employeeId mapping but allow overwriting if necessary
+                if (!existingMap.has(key)) existingMap.set(key, p);
+            });
         });
+
+        // Ensure employees referenced by payroll records are included in the users list
+        // (some payroll docs may exist for employeeIds that are not present in the users list)
+        try {
+            const userIdSet = new Set((users || []).map(u => String(u.id || u.uid || '').trim()).filter(Boolean));
+            const employeeCodeSet = new Set((users || []).map(u => String(u.employeeId || '').trim()).filter(Boolean));
+
+            processedDatabaseRecords.forEach(p => {
+                if (p.year !== y || p.month !== m) return;
+                const candidateId = String(p.employeeId || p.userId || p.parentEmployeeId || p.employeeCode || '').trim();
+                if (!candidateId) return;
+                if (!userIdSet.has(candidateId) && !employeeCodeSet.has(candidateId)) {
+                    // Add a lightweight placeholder user so payroll rows render for this employee
+                    users.push({ id: candidateId, uid: candidateId, employeeId: candidateId, name: p.employeeName || 'Employee' });
+                    userIdSet.add(candidateId);
+                }
+            });
+        } catch (e) {
+            if (debugPayroll) console.error('[Payroll Debug] Failed to augment users list from payroll records:', e && e.message ? e.message : e);
+        }
 
         const dateFormat = { month: 'long', day: 'numeric', year: 'numeric' };
         const midMonthDateStr = new Date(y, m, 15).toLocaleDateString('en-US', dateFormat);
@@ -306,7 +357,37 @@ exports.managePayroll = async (req, res) => {
             const employeeCode = String(u.employeeId || '').trim();
             const uName = u.name || u.email || 'Employee';
 
-            const midRecord = existingMap.get(`${uId}-1`) || (employeeCode ? existingMap.get(`${employeeCode}-1`) : null);
+            let midRecord = existingMap.get(`${uId}-1`) || (employeeCode ? existingMap.get(`${employeeCode}-1`) : null);
+            // Fallback: search processedDatabaseRecords for a matching record in the selected month/year
+            if (!midRecord) {
+                if (debugPayroll) {
+                    const monthCandidates = processedDatabaseRecords.filter(p => p.pIdx === 1 && p.year === y && p.month === m);
+                    console.log(`[Payroll Debug] Searching MID for user ${uId} (${employeeCode}) in ${y}-${m}. Records in month: ${monthCandidates.length}`);
+                }
+
+                midRecord = processedDatabaseRecords.find(p => {
+                    if (p.pIdx !== 1) return false;
+                    if (p.year !== y || p.month !== m) return false;
+                    const candidates = new Set([
+                        buildPayrollKey(p.employeeId),
+                        buildPayrollKey(p.parentEmployeeId),
+                        buildPayrollKey(p.employeeCode),
+                        buildPayrollKey(p.userId),
+                    ]);
+                    if (candidates.has(uId) || (employeeCode && candidates.has(employeeCode))) return true;
+                    // Fallback to name match (case-insensitive)
+                    if (p.employeeName && uName && String(p.employeeName).trim().toLowerCase() === String(uName).trim().toLowerCase()) return true;
+                    return false;
+                }) || null;
+
+                if (debugPayroll) {
+                    if (midRecord) {
+                        console.log(`[Payroll Debug] Matched MID payroll id=${midRecord.id} for user ${uId} — fields: employeeId=${midRecord.employeeId}, parentEmployeeId=${midRecord.parentEmployeeId}, employeeCode=${midRecord.employeeCode}, employeeName='${midRecord.employeeName}'`);
+                    } else {
+                        console.log(`[Payroll Debug] No MID payroll match found for user ${uId} (${employeeCode}) in ${y}-${m}`);
+                    }
+                }
+            }
             if (midRecord) {
                 const normalizedRecord = {
                     ...midRecord,
@@ -346,7 +427,35 @@ exports.managePayroll = async (req, res) => {
                 });
             }
 
-            const endRecord = existingMap.get(`${uId}-2`) || (employeeCode ? existingMap.get(`${employeeCode}-2`) : null);
+            let endRecord = existingMap.get(`${uId}-2`) || (employeeCode ? existingMap.get(`${employeeCode}-2`) : null);
+            if (!endRecord) {
+                if (debugPayroll) {
+                    const monthCandidates = processedDatabaseRecords.filter(p => p.pIdx === 2 && p.year === y && p.month === m);
+                    console.log(`[Payroll Debug] Searching END for user ${uId} (${employeeCode}) in ${y}-${m}. Records in month: ${monthCandidates.length}`);
+                }
+
+                endRecord = processedDatabaseRecords.find(p => {
+                    if (p.pIdx !== 2) return false;
+                    if (p.year !== y || p.month !== m) return false;
+                    const candidates = new Set([
+                        buildPayrollKey(p.employeeId),
+                        buildPayrollKey(p.parentEmployeeId),
+                        buildPayrollKey(p.employeeCode),
+                        buildPayrollKey(p.userId),
+                    ]);
+                    if (candidates.has(uId) || (employeeCode && candidates.has(employeeCode))) return true;
+                    if (p.employeeName && uName && String(p.employeeName).trim().toLowerCase() === String(uName).trim().toLowerCase()) return true;
+                    return false;
+                }) || null;
+
+                if (debugPayroll) {
+                    if (endRecord) {
+                        console.log(`[Payroll Debug] Matched END payroll id=${endRecord.id} for user ${uId} — fields: employeeId=${endRecord.employeeId}, parentEmployeeId=${endRecord.parentEmployeeId}, employeeCode=${endRecord.employeeCode}, employeeName='${endRecord.employeeName}'`);
+                    } else {
+                        console.log(`[Payroll Debug] No END payroll match found for user ${uId} (${employeeCode}) in ${y}-${m}`);
+                    }
+                }
+            }
             if (endRecord) {
                 const normalizedRecord = {
                     ...endRecord,
@@ -407,6 +516,67 @@ exports.managePayroll = async (req, res) => {
     } catch (error) {
         console.error("Payroll Error:", error);
         res.status(500).send("Error loading payroll data.");
+    }
+};
+
+// Admin debug: scan all payroll docs and report derived year/month/period info
+exports.debugPayrollScan = async (req, res) => {
+    try {
+        const snapshot = await db.collectionGroup('payroll').get();
+        const results = snapshot.docs.map(doc => {
+            const data = doc.data() || {};
+
+            const parseIdInfo = (id) => {
+                const parts = String(id).split('-');
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const periodIdx = parseInt(parts[2], 10);
+                    if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(periodIdx)) {
+                        return { year, month, periodIdx };
+                    }
+                }
+                return null;
+            };
+
+            let dateObj = parseDate(data.paymentDate || data.periodEnd || data.periodStart || data.updatedAt || data.date || data.timestamp);
+            const idInfo = parseIdInfo(doc.id);
+            if (!dateObj && idInfo) {
+                if (idInfo.periodIdx === 1) dateObj = new Date(idInfo.year, idInfo.month, 15);
+                else dateObj = new Date(idInfo.year, idInfo.month + 1, 0);
+            }
+
+            const year = dateObj ? dateObj.getFullYear() : null;
+            const month = dateObj ? dateObj.getMonth() : null;
+            const pIdx = idInfo ? idInfo.periodIdx : (dateObj ? (dateObj.getDate() <= 15 ? 1 : 2) : null);
+
+            const parentDoc = doc.ref.parent ? doc.ref.parent.parent : null;
+            const parentEmployeeId = parentDoc ? String(parentDoc.id) : null;
+
+            return {
+                id: doc.id,
+                path: doc.ref.path,
+                employeeId: String(data.employeeId || data.userId || parentEmployeeId || '').trim() || null,
+                employeeName: data.employeeName || data.name || null,
+                rawPaymentDate: data.paymentDate || null,
+                rawPeriodStart: data.periodStart || null,
+                rawPeriodEnd: data.periodEnd || null,
+                inferredYear: year,
+                inferredMonth: month,
+                inferredPeriodIdx: pIdx
+            };
+        });
+
+        // aggregate months present
+        const monthsSet = new Set();
+        results.forEach(r => {
+            if (r.inferredYear !== null && r.inferredMonth !== null) monthsSet.add(`${r.inferredYear}-${r.inferredMonth}`);
+        });
+
+        res.json({ count: results.length, months: Array.from(monthsSet).sort(), records: results });
+    } catch (error) {
+        console.error('Debug payroll scan failed:', error.message);
+        res.status(500).json({ error: error.message });
     }
 };
 

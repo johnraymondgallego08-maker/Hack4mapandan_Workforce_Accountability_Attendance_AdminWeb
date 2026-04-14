@@ -157,7 +157,7 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, department, position } = req.body;
 
     if (!name || !email || !password || !role) {
         req.flash('error', 'Please fill out all fields.');
@@ -173,6 +173,8 @@ exports.register = async (req, res) => {
         });
 
         const normalizedRole = role.trim();
+        const safeDepartment = String(department || '').trim();
+        const safePosition = String(position || '').trim();
 
         // 2. Save user details to 'employees' collection in Firestore, using the UID from Auth as the document ID
         await db.collection('employees').doc(userRecord.uid).set({
@@ -182,7 +184,9 @@ exports.register = async (req, res) => {
             status: 'Active', // Default status
             employmentStatus: '',
             workSchedule: '',
-            supervisor: ''
+            supervisor: '',
+            department: safeDepartment,
+            position: safePosition
         });
 
         // 3. If role is admin, also add to 'Admin' collection to allow login access

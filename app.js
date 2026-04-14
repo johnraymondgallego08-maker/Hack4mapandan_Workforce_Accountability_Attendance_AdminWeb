@@ -17,6 +17,8 @@ const webRoutes = require("./routes/web");
 const adminRoutes = require("./routes/adminRoutes");
 const overtimeRoutes = require("./routes/overtimeRoutes");
 const userController = require("./controllers/userController");
+const attendanceController = require("./controllers/attendanceControllers");
+const payrollController = require("./controllers/payrollController");
 const userModel = require("./models/userModel");
 const authMiddleware = require("./middlewares/authMiddleware");
 const adminMiddleware = require("./middlewares/adminMiddleware");
@@ -128,6 +130,7 @@ app.post(
     upload.single('profileImage'),
     userController.updateProfile
 );
+
 app.use("/", webRoutes);
 app.use("/", adminRoutes);
 app.use("/", overtimeRoutes);
@@ -198,26 +201,53 @@ app.get('/fix-login', securityMiddleware.requireEmergencyAccess, async (req, res
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
+const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 3000;
+const MAX_PORT_TRIES = 10;
 
-    if (admin.apps.length) {
-        console.log(`✅ Firebase Admin SDK initialized for project: ${projectId}`);
-        try {
-            await db.listCollections();
-            console.log(`✅ Connected to database: ${projectId}`);
-        } catch (error) {
-            console.error('❌ Failed to connect to database:', error.message);
+function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
+    const server = app.listen(port, async () => {
+        if (admin.apps.length) {
+            console.log(`✅ Firebase Admin SDK initialized for project: ${projectId}`);
+            try {
+                await db.listCollections();
+                console.log(`✅ Connected to database: ${projectId}`);
+            } catch (error) {
+                console.error('❌ Failed to connect to database:', error.message);
+            }
+
+            try {
+                await admin.auth().listUsers(1);
+                console.log(`✅ Connected to Authentication service.`);
+            } catch (error) {
+                console.error('❌ Failed to connect to Authentication service:', error.message);
+            }
         }
 
-        try {
-            await admin.auth().listUsers(1);
-            console.log(`✅ Connected to Authentication service.`);
-        } catch (error) {
-            console.error('❌ Failed to connect to Authentication service:', error.message);
+        console.log(`Server running on http://localhost:${port}`);
+    });
+
+    server.on('error', (err) => {
+        if (err && err.code === 'EADDRINUSE') {
+            console.error(`[APP] Port ${port} is already in use.`);
+            // If PORT was explicitly provided via env, don't silently switch ports.
+            if (process.env.PORT) {
+                console.error('[APP] PORT is set in environment. Please stop the process using that port or set PORT to a different value.');
+                process.exit(1);
+            }
+
+            if (attemptsLeft > 0) {
+                const nextPort = port + 1;
+                console.log(`[APP] Trying port ${nextPort} (${attemptsLeft - 1} attempts left)...`);
+                setTimeout(() => startServer(nextPort, attemptsLeft - 1), 200);
+            } else {
+                console.error('[APP] All fallback port attempts failed. Please free a port or set the PORT environment variable.');
+                process.exit(1);
+            }
+        } else {
+            console.error('[APP] Server error:', err);
+            process.exit(1);
         }
-    }
+    });
+}
 
-    console.log(`Server running on http://localhost:${PORT}`);
-
-});
+startServer(DEFAULT_PORT);

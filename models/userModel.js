@@ -7,7 +7,9 @@ const EMPLOYEE_DEFAULT_FIELDS = {
     status: 'Active',
     employmentStatus: '',
     workSchedule: '',
-    supervisor: ''
+    supervisor: '',
+    department: '',
+    position: ''
 };
 
 function isEmployeeUser(user) {
