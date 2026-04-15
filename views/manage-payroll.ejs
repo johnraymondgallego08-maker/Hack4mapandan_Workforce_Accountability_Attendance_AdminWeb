@@ -58,140 +58,162 @@
                 </thead>
                 <tbody>
                     <% if (locals.payroll && payroll.length> 0) { %>
-                            <% payroll.forEach(p=> { %>
-                                <% const calcPanelId = `history-${String(p.employeeId || 'employee').replace(/[^a-zA-Z0-9_-]/g, '-')}-${String(p.id || 'record').replace(/[^a-zA-Z0-9_-]/g, '-')}`; %>
-                                <tr>
-                                    <td>
-                                        <div style="font-weight: 700; color: var(--text-heading); white-space: nowrap;">
-                                            <%= p.employeeName %>
+                        <% payroll.forEach(p=> { %>
+                            <% const defaultPayDate = p.selectedPayDate === 'end' ? 'end' : '15'; %>
+                            <% const payrollSlots = [
+                                { key: '15', label: (p.midRecord && p.midRecord.paymentDate) ? p.midRecord.paymentDate : '15th', record: p.midRecord || null },
+                                { key: 'end', label: (p.endRecord && p.endRecord.paymentDate) ? p.endRecord.paymentDate : 'End of Month', record: p.endRecord || null }
+                            ]; %>
+                            <tr class="payroll-employee-row" data-default-pay-date="<%= defaultPayDate %>">
+                                <td>
+                                    <div style="font-weight: 700; color: var(--text-heading); white-space: nowrap;">
+                                        <%= p.employeeName %>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                        <%= p.employeeCode || p.employeeId || 'No employee code' %>
+                                    </div>
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                    <select class="payroll-row-date-select btn"
+                                        style="background: rgba(255,255,255,0.72); color: var(--text-heading); border: 1px solid var(--border-glass); padding: 0.4rem 0.65rem; cursor: pointer; font-weight: 700; outline: none; min-width: 165px;">
+                                        <% payrollSlots.forEach(slot => { %>
+                                            <option value="<%= slot.key %>" <%= defaultPayDate === slot.key ? 'selected' : '' %>><%= slot.label %></option>
+                                        <% }) %>
+                                    </select>
+                                </td>
+                                <td
+                                    style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600; color: var(--accent-primary);">
+                                    <% payrollSlots.forEach(slot => { const record = slot.record || {}; %>
+                                        <div class="payroll-slot" data-payroll-slot="period" data-pay-date="<%= slot.key %>" style="<%= defaultPayDate === slot.key ? '' : 'display:none;' %>">
+                                            <%= record.period || 'N/A' %>
                                         </div>
-                                        <div style="font-size: 0.75rem; color: var(--text-muted);">
-                                            <%= p.employeeCode || p.employeeId || 'No employee code' %>
-                                        </div>
-                                    </td>
-                                    <td style="color: var(--text-muted); font-size: 0.85rem;">
-                                        <%= p.paymentDate %>
-                                    </td>
-                                    <td
-                                        style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600; color: var(--accent-primary);">
-                                        <%= p.period %>
-                                    </td>
-                                    <td class="text-right">
-                                        <div class="font-mono"
-                                            style="font-weight: 800; color: var(--text-heading); background: rgba(124, 58, 237, 0.08); display: inline-block; padding: 0.4rem 0.8rem; border-radius: 0.5rem; border: 1px solid var(--border-glass);">
-                                            <span style="padding: 0 0.5rem;">₱<%= Number(p.netPay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td style="text-align: right;">
-                                        <% const basicPay = p.basic !== undefined && p.basic !== null ? Number(p.basic) : null; %>
-                                        <% const bonusPay = p.bonus !== undefined && p.bonus !== null ? Number(p.bonus) : 0; %>
-                                        <% const deductionPay = p.deductions !== undefined && p.deductions !== null ? Number(p.deductions) : 0; %>
-                                        <% const netPayAmount = Number(p.netPay) || 0; %>
-                                        <% const hasBreakdown = basicPay !== null || bonusPay !== 0 || deductionPay !== 0; %>
-                                        <div class="payroll-calc-wrap">
-                                            <div class="payroll-breakdown-card">
-                                                <% if (hasBreakdown) { %>
-                                                    <div class="payroll-breakdown-row">
-                                                        <span>Basic Pay</span>
-                                                        <strong>₱<%= (basicPay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                    </div>
-                                                    <div class="payroll-breakdown-row">
-                                                        <span>Bonus</span>
-                                                        <strong>₱<%= bonusPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                    </div>
-                                                    <div class="payroll-breakdown-row">
-                                                        <span>Deductions</span>
-                                                        <strong>-₱<%= deductionPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                    </div>
-                                                    <div class="payroll-breakdown-total">
-                                                        <span>Net Pay</span>
-                                                        <strong>₱<%= netPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                    </div>
-                                                <% } else { %>
-                                                    <div class="payroll-breakdown-total">
-                                                        <span>Saved Net Pay</span>
-                                                        <strong>₱<%= netPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                    </div>
-                                                <% } %>
-                                            </div>
-
-                                            <% const history = Array.isArray(p.dailyHistory) ? p.dailyHistory : []; %>
-                                            <% const totalDays = history.length; %>
-                                            <% const totalHours = history.reduce((sum, day) => sum + (Number(day.hours) || 0), 0); %>
-                                            <% const totalDailyAmount = history.reduce((sum, day) => sum + (Number(day.amount) || 0), 0); %>
-                                            <button type="button" class="payroll-calc-toggle"
-                                                data-target="<%= calcPanelId %>" aria-expanded="false">
-                                                <span>Daily Computation</span>
-                                                <i data-lucide="chevron-down" class="payroll-calc-chevron"></i>
-                                            </button>
-                                            <div id="<%= calcPanelId %>" class="payroll-calc-panel">
-                                                <% if (history.length > 0) { %>
-                                                    <div class="payroll-calc-summary">
-                                                        <span class="payroll-calc-chip">Days: <strong><%= totalDays %></strong></span>
-                                                        <span class="payroll-calc-chip">Hours: <strong><%= totalHours.toFixed(2) %></strong></span>
-                                                        <span class="payroll-calc-chip">Computed: <strong>₱<%= totalDailyAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></span>
-                                                    </div>
-
-                                                    <div class="payroll-calc-table">
-                                                        <div class="payroll-calc-row payroll-calc-head">
-                                                            <span>Date</span>
-                                                            <span>Work Log</span>
-                                                            <span>Daily Salary</span>
-                                                        </div>
-                                                        <% history.forEach(day => { %>
-                                                            <div class="payroll-calc-row">
-                                                                <span><%= day.date %></span>
-                                                                <span>
-                                                                    <% if (Number(day.hours) > 0) { %>
-                                                                        <%= Number(day.hours).toFixed(2) %>h worked
-                                                                    <% } else { %>
-                                                                        Login recorded
-                                                                    <% } %>
-                                                                </span>
-                                                                <span>₱<%= Number(day.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></span>
-                                                            </div>
-                                                        <% }) %>
-                                                    </div>
-                                                <% } else { %>
-                                                    <div class="payroll-calc-empty">No login logs found for this payroll period.</div>
-                                                <% } %>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style="text-align: right;">
-                                        <div class="table-action-group">
-                                            <% if (p.hasSavedRecord) { %>
-                                                <form action="/payroll/process/<%= p.id %>" method="POST" class="inline">
-                                                    <input type="hidden" name="employeeId" value="<%= p.employeeId %>">
-                                                    <button type="submit" class="btn btn-primary"
-                                                        style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 2rem;">Process</button>
-                                                </form>
-                                                <a href="/payroll/edit/<%= p.id %>?employeeId=<%= encodeURIComponent(p.employeeId || '') %>" class="btn-action" title="Edit">
-                                                    <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
-                                                </a>
-                                                <form action="/payroll/delete/<%= p.id %>" method="POST" class="inline"
-                                                    onsubmit="confirmDelete(this, 'Delete Payroll Record', 'This payroll record will be removed from the saved ledger.')">
-                                                    <input type="hidden" name="employeeId" value="<%= p.employeeId %>">
-                                                    <button type="submit" class="btn-action btn-delete" title="Delete">
-                                                        <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
-                                                    </button>
-                                                </form>
-                                            <% } else { %>
-                                                <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">No saved payroll yet</span>
-                                            <% } %>
-                                        </div>
-                                    </td>
-                                </tr>
                                     <% }) %>
-                                        <% } else { %>
-                                            <% // No payroll records found fallback %>
-                                                <tr data-empty-state="true">
-                                                    <td colspan="6"
-                                                        style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">
-                                                        No payroll records found.</td>
-                                                </tr>
+                                </td>
+                                <td class="text-right">
+                                    <% payrollSlots.forEach(slot => { const record = slot.record || {}; const displayNetPay = Number(record.displayNetPay !== undefined ? record.displayNetPay : record.netPay || 0); %>
+                                        <div class="payroll-slot" data-payroll-slot="salary" data-pay-date="<%= slot.key %>" style="<%= defaultPayDate === slot.key ? '' : 'display:none;' %>">
+                                            <div class="font-mono"
+                                                style="font-weight: 800; color: var(--text-heading); background: rgba(124, 58, 237, 0.08); display: inline-block; padding: 0.4rem 0.8rem; border-radius: 0.5rem; border: 1px solid var(--border-glass);">
+                                                <span style="padding: 0 0.5rem;">₱<%= displayNetPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </td>
+                                <td style="text-align: right;">
+                                    <% payrollSlots.forEach(slot => { const record = slot.record || {}; const basicPay = record.basic !== undefined && record.basic !== null ? Number(record.basic) : null; const bonusPay = record.bonus !== undefined && record.bonus !== null ? Number(record.bonus) : 0; const deductionPay = record.deductions !== undefined && record.deductions !== null ? Number(record.deductions) : 0; const netPayAmount = Number(record.displayNetPay !== undefined ? record.displayNetPay : record.netPay) || 0; const savedNetPayAmount = Number(record.savedNetPay !== undefined ? record.savedNetPay : record.netPay) || 0; const hasBreakdown = basicPay !== null || bonusPay !== 0 || deductionPay !== 0; const history = Array.isArray(record.dailyHistory) ? record.dailyHistory : []; const totalDays = history.length; const totalHours = history.reduce((sum, day) => sum + (Number(day.hours) || 0), 0); const totalDailyAmount = history.reduce((sum, day) => sum + (Number(day.amount) || 0), 0); const calcPanelId = `history-${String(p.employeeId || 'employee').replace(/[^a-zA-Z0-9_-]/g, '-')}-${slot.key}`; %>
+                                        <div class="payroll-slot" data-payroll-slot="calculation" data-pay-date="<%= slot.key %>" style="<%= defaultPayDate === slot.key ? '' : 'display:none;' %>">
+                                            <div class="payroll-calc-wrap">
+                                                <div class="payroll-breakdown-card">
+                                                    <% if (hasBreakdown) { %>
+                                                        <div class="payroll-breakdown-row">
+                                                            <span>Basic Pay</span>
+                                                            <strong>₱<%= (basicPay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                        </div>
+                                                        <div class="payroll-breakdown-row">
+                                                            <span>Bonus</span>
+                                                            <strong>₱<%= bonusPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                        </div>
+                                                        <div class="payroll-breakdown-row">
+                                                            <span>Deductions</span>
+                                                            <strong>-₱<%= deductionPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                        </div>
+                                                        <div class="payroll-breakdown-total">
+                                                            <span>Net Pay</span>
+                                                            <strong>₱<%= netPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                        </div>
+                                                    <% } else { %>
+                                                        <div class="payroll-breakdown-total">
+                                                            <span><%= record.displayAmountSource === 'computed' ? 'Computed Net Pay' : (record.displayAmountSource === 'computed-fallback' ? 'Computed Net Pay' : 'Saved Net Pay') %></span>
+                                                            <strong>₱<%= netPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                        </div>
+                                                        <% if (record.displayAmountSource === 'computed-fallback' && savedNetPayAmount !== netPayAmount) { %>
+                                                            <div class="payroll-breakdown-row">
+                                                                <span>Saved Net Pay</span>
+                                                                <strong>₱<%= savedNetPayAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
+                                                            </div>
+                                                        <% } %>
+                                                    <% } %>
+                                                </div>
+
+                                                <button type="button" class="payroll-calc-toggle"
+                                                    data-target="<%= calcPanelId %>" aria-expanded="false">
+                                                    <span>Daily Computation</span>
+                                                    <i data-lucide="chevron-down" class="payroll-calc-chevron"></i>
+                                                </button>
+                                                <div id="<%= calcPanelId %>" class="payroll-calc-panel">
+                                                    <% if (history.length > 0) { %>
+                                                        <div class="payroll-calc-summary">
+                                                            <span class="payroll-calc-chip">Days: <strong><%= totalDays %></strong></span>
+                                                            <span class="payroll-calc-chip">Hours: <strong><%= totalHours.toFixed(2) %></strong></span>
+                                                            <span class="payroll-calc-chip">Computed: <strong>₱<%= totalDailyAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></span>
+                                                        </div>
+
+                                                        <div class="payroll-calc-table">
+                                                            <div class="payroll-calc-row payroll-calc-head">
+                                                                <span>Date</span>
+                                                                <span>Work Log</span>
+                                                                <span>Daily Salary</span>
+                                                            </div>
+                                                            <% history.forEach(day => { %>
+                                                                <div class="payroll-calc-row">
+                                                                    <span><%= day.date %></span>
+                                                                    <span>
+                                                                        <% if (Number(day.hours) > 0) { %>
+                                                                            <%= Number(day.hours).toFixed(2) %>h worked
+                                                                        <% } else { %>
+                                                                            Login recorded
+                                                                        <% } %>
+                                                                    </span>
+                                                                    <span>₱<%= Number(day.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></span>
+                                                                </div>
+                                                            <% }) %>
+                                                        </div>
+                                                    <% } else { %>
+                                                        <div class="payroll-calc-empty">No login logs found for this payroll period.</div>
+                                                    <% } %>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </td>
+                                <td style="text-align: right;">
+                                    <% payrollSlots.forEach(slot => { const record = slot.record || {}; %>
+                                        <div class="payroll-slot" data-payroll-slot="actions" data-pay-date="<%= slot.key %>" style="<%= defaultPayDate === slot.key ? '' : 'display:none;' %>">
+                                            <div class="table-action-group">
+                                                <% if (record.hasSavedRecord) { %>
+                                                    <form action="/payroll/process/<%= record.id %>" method="POST" class="inline">
+                                                        <input type="hidden" name="employeeId" value="<%= record.employeeId %>">
+                                                        <button type="submit" class="btn btn-primary"
+                                                            style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 2rem;">Process</button>
+                                                    </form>
+                                                    <a href="/payroll/edit/<%= record.id %>?employeeId=<%= encodeURIComponent(record.employeeId || '') %>" class="btn-action" title="Edit">
+                                                        <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
+                                                    </a>
+                                                    <form action="/payroll/delete/<%= record.id %>" method="POST" class="inline"
+                                                        onsubmit="confirmDelete(this, 'Delete Payroll Record', 'This payroll record will be removed from the saved ledger.')">
+                                                        <input type="hidden" name="employeeId" value="<%= record.employeeId %>">
+                                                        <button type="submit" class="btn-action btn-delete" title="Delete">
+                                                            <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
+                                                        </button>
+                                                    </form>
+                                                <% } else { %>
+                                                    <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">No saved payroll yet</span>
                                                 <% } %>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <% // No payroll records found fallback %>
+                        <tr data-empty-state="true">
+                            <td colspan="6"
+                                style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">
+                                No payroll records found.</td>
+                        </tr>
+                    <% } %>
                 </tbody>
             </table>
         </div>
@@ -392,6 +414,27 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
+
+        const applyPayrollRowSelection = (row, payDate) => {
+            if (!row) return;
+
+            row.querySelectorAll('.payroll-slot[data-pay-date]').forEach((slot) => {
+                slot.style.display = slot.dataset.payDate === payDate ? '' : 'none';
+            });
+        };
+
+        document.querySelectorAll('.payroll-employee-row').forEach((row) => {
+            const select = row.querySelector('.payroll-row-date-select');
+            const initialPayDate = select ? select.value : (row.dataset.defaultPayDate || '15');
+
+            applyPayrollRowSelection(row, initialPayDate);
+
+            if (select) {
+                select.addEventListener('change', () => {
+                    applyPayrollRowSelection(row, select.value || '15');
+                });
+            }
+        });
 
         if (typeof initTableManagement === 'function') {
             initTableManagement('#payrollTable', '#searchInput', '.pagination-controls', 10);

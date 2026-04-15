@@ -43,8 +43,144 @@ function getPayrollAmountValue(record = {}) {
     ));
 }
 
+function hasMeaningfulAmount(value) {
+    return Math.abs(getNumericValue(value)) > 0.004;
+}
+
+function hasExplicitPayrollBreakdown(record = {}) {
+    return ['basic', 'bonus', 'deductions'].some((key) => {
+        const value = record[key];
+        return value !== undefined && value !== null && String(value).trim() !== '';
+    });
+}
+
+function sumDailyHistoryAmounts(dailyHistory = []) {
+    if (!Array.isArray(dailyHistory) || dailyHistory.length === 0) return 0;
+    const total = dailyHistory.reduce((sum, day) => sum + getNumericValue(day && day.amount), 0);
+    return Number(total.toFixed(2));
+}
+
+function resolvePayrollDisplayAmounts(record = {}, dailyHistory = []) {
+    const savedNetPay = Number(getPayrollAmountValue(record).toFixed(2));
+    const computedNetPay = sumDailyHistoryAmounts(dailyHistory);
+    const hasSavedRecord = Boolean(record.hasSavedRecord);
+    const hasBreakdown = hasExplicitPayrollBreakdown(record);
+
+    let displayNetPay = savedNetPay;
+    let displayAmountSource = 'saved';
+
+    if (!hasSavedRecord && computedNetPay > 0) {
+        displayNetPay = computedNetPay;
+        displayAmountSource = 'computed';
+    } else if (hasSavedRecord && !hasBreakdown && !hasMeaningfulAmount(savedNetPay) && computedNetPay > 0) {
+        displayNetPay = computedNetPay;
+        displayAmountSource = 'computed-fallback';
+    }
+
+    return {
+        savedNetPay,
+        computedNetPay,
+        displayNetPay: Number(displayNetPay.toFixed(2)),
+        displayAmountSource
+    };
+}
+
 function buildPayrollKey(value) {
     return String(value || '').trim();
+}
+
+function buildPayrollUserKey(user = {}) {
+    const primaryId = buildPayrollKey(user.id || user.uid || user.employeeId || user.employeeCode);
+    const employeeCode = buildPayrollKey(user.employeeId);
+    return primaryId || employeeCode || String(user.name || user.email || '').trim().toLowerCase();
+}
+
+function dedupePayrollUsers(users = []) {
+    const userMap = new Map();
+
+    users.forEach((user) => {
+        if (!user) return;
+        const key = buildPayrollUserKey(user);
+        if (!key) return;
+
+        const existing = userMap.get(key);
+        if (!existing) {
+            userMap.set(key, user);
+            return;
+        }
+
+        const existingScore = [
+            existing.name,
+            existing.email,
+            existing.employeeId,
+            existing.id || existing.uid
+        ].filter(Boolean).length;
+        const incomingScore = [
+            user.name,
+            user.email,
+            user.employeeId,
+            user.id || user.uid
+        ].filter(Boolean).length;
+
+        if (incomingScore > existingScore) {
+            userMap.set(key, { ...existing, ...user });
+        }
+    });
+
+    return Array.from(userMap.values());
+}
+
+function getDefaultPayrollDateSelection(referenceDate = new Date()) {
+    return referenceDate.getDate() <= 15 ? '15' : 'end';
+}
+
+function normalizePayrollDateSelection(value, referenceDate = new Date()) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'all') return 'all';
+    if (normalized === '15' || normalized === 'mid' || normalized === 'mid-month') return '15';
+    if (normalized === '30' || normalized === 'end' || normalized === 'end-of-month') return 'end';
+    return getDefaultPayrollDateSelection(referenceDate);
+}
+
+function choosePreferredPayrollRow(currentRow, incomingRow) {
+    if (!currentRow) return incomingRow;
+    if (!incomingRow) return currentRow;
+
+    const scoreRow = (row) => {
+        const updatedAt = parseDate(row.updatedAt || row.paymentDate || row.periodEnd || row.periodStart || row.date || row.timestamp);
+        return [
+            row.hasSavedRecord ? 4 : 0,
+            hasExplicitPayrollBreakdown(row) ? 3 : 0,
+            hasMeaningfulAmount(row.savedNetPay !== undefined ? row.savedNetPay : row.netPay) ? 2 : 0,
+            Array.isArray(row.dailyHistory) && row.dailyHistory.length > 0 ? 1 : 0,
+            updatedAt ? updatedAt.getTime() : 0
+        ];
+    };
+
+    const currentScore = scoreRow(currentRow);
+    const incomingScore = scoreRow(incomingRow);
+
+    for (let index = 0; index < currentScore.length; index += 1) {
+        if (incomingScore[index] > currentScore[index]) return incomingRow;
+        if (incomingScore[index] < currentScore[index]) return currentRow;
+    }
+
+    return currentRow;
+}
+
+function chooseDefaultGroupedPayrollDate(groupedRow = {}, referenceDate = new Date()) {
+    const midRecord = groupedRow.midRecord || null;
+    const endRecord = groupedRow.endRecord || null;
+
+    if (midRecord && midRecord.hasSavedRecord && (!endRecord || !endRecord.hasSavedRecord)) {
+        return '15';
+    }
+
+    if (endRecord && endRecord.hasSavedRecord && (!midRecord || !midRecord.hasSavedRecord)) {
+        return 'end';
+    }
+
+    return getDefaultPayrollDateSelection(referenceDate);
 }
 
 function buildPeriodRange(record, fallbackYear, fallbackMonth, fallbackPeriodIdx) {
@@ -228,7 +364,7 @@ exports.managePayroll = async (req, res) => {
             attendanceModel.getAllAttendance()
         ]);
         const payrollRecords = payrollRecordsRaw || [];
-        const users = usersRaw || [];
+        const users = dedupePayrollUsers(usersRaw || []);
         const attendanceRecords = attendanceRaw || [];
 
         // Parse your specific document ID format: YYYY-MM-P (e.g., 2026-03-1)
@@ -259,6 +395,8 @@ exports.managePayroll = async (req, res) => {
         } else {
             m = defaultMonth;
         }
+
+        const selectedPayrollDate = normalizePayrollDateSelection(req.query.payDate, now);
 
         // 2. Map existing records into a lookup map using EmployeeId + Year + Month + Period index
         const existingMap = new Map();
@@ -402,9 +540,11 @@ exports.managePayroll = async (req, res) => {
                         payrollModel.updateDailyHistory(normalizedRecord.id, normalizedRecord.employeeId, computedDailyHistory)
                     );
                 }
+                const amountInfo = resolvePayrollDisplayAmounts(normalizedRecord, computedDailyHistory);
                 finalPayroll.push({
                     ...normalizedRecord,
-                    dailyHistory: computedDailyHistory
+                    dailyHistory: computedDailyHistory,
+                    ...amountInfo
                 });
             } else {
                 const defaultMidRecord = {
@@ -421,9 +561,12 @@ exports.managePayroll = async (req, res) => {
                     year: y,
                     month: m
                 };
+                const computedDailyHistory = buildDailyHistory(defaultMidRecord, attendanceRecords, u);
+                const amountInfo = resolvePayrollDisplayAmounts(defaultMidRecord, computedDailyHistory);
                 finalPayroll.push({
                     ...defaultMidRecord,
-                    dailyHistory: buildDailyHistory(defaultMidRecord, attendanceRecords, u)
+                    dailyHistory: computedDailyHistory,
+                    ...amountInfo
                 });
             }
 
@@ -470,9 +613,11 @@ exports.managePayroll = async (req, res) => {
                         payrollModel.updateDailyHistory(normalizedRecord.id, normalizedRecord.employeeId, computedDailyHistory)
                     );
                 }
+                const amountInfo = resolvePayrollDisplayAmounts(normalizedRecord, computedDailyHistory);
                 finalPayroll.push({
                     ...normalizedRecord,
-                    dailyHistory: computedDailyHistory
+                    dailyHistory: computedDailyHistory,
+                    ...amountInfo
                 });
             } else {
                 const defaultEndRecord = {
@@ -489,29 +634,67 @@ exports.managePayroll = async (req, res) => {
                     year: y,
                     month: m
                 };
+                const computedDailyHistory = buildDailyHistory(defaultEndRecord, attendanceRecords, u);
+                const amountInfo = resolvePayrollDisplayAmounts(defaultEndRecord, computedDailyHistory);
                 finalPayroll.push({
                     ...defaultEndRecord,
-                    dailyHistory: buildDailyHistory(defaultEndRecord, attendanceRecords, u)
+                    dailyHistory: computedDailyHistory,
+                    ...amountInfo
                 });
             }
         });
 
-        // 4. Group by name, then by period
-        finalPayroll.sort((a, b) => {
-            const nameComp = (a.employeeName || "").localeCompare(b.employeeName || "");
-            if (nameComp !== 0) return nameComp;
-            const getPeriodIdx = (p) => p.period === 'Mid-Month' ? 1 : 2;
-            return getPeriodIdx(a) - getPeriodIdx(b);
+        const dedupedPayrollMap = new Map();
+        finalPayroll.forEach((row) => {
+            const rowKey = `${buildPayrollKey(row.employeeId || row.employeeCode || row.employeeName)}-${row.pIdx}`;
+            const preferredRow = choosePreferredPayrollRow(dedupedPayrollMap.get(rowKey), row);
+            dedupedPayrollMap.set(rowKey, preferredRow);
         });
+
+        const groupedPayrollMap = new Map();
+        Array.from(dedupedPayrollMap.values()).forEach((row) => {
+            const rowKey = buildPayrollKey(row.employeeId || row.employeeCode || row.employeeName);
+            const existingGroup = groupedPayrollMap.get(rowKey) || {
+                employeeId: row.employeeId,
+                employeeCode: row.employeeCode || row.employeeId || '',
+                employeeName: row.employeeName || 'Employee',
+                midRecord: null,
+                endRecord: null
+            };
+
+            if (row.pIdx === 1) {
+                existingGroup.midRecord = row;
+            } else {
+                existingGroup.endRecord = row;
+            }
+
+            groupedPayrollMap.set(rowKey, existingGroup);
+        });
+
+        const groupedPayroll = Array.from(groupedPayrollMap.values())
+            .map((group) => {
+                const defaultPayDate = chooseDefaultGroupedPayrollDate(group, now);
+                const selectedRecord = defaultPayDate === '15'
+                    ? (group.midRecord || group.endRecord)
+                    : (group.endRecord || group.midRecord);
+
+                return {
+                    ...group,
+                    selectedPayDate: defaultPayDate,
+                    selectedRecord
+                };
+            })
+            .sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
 
         if (dailyHistorySyncTasks.length > 0) {
             await Promise.allSettled(dailyHistorySyncTasks);
         }
 
         res.render('manage-payroll', {
-            payroll: finalPayroll,
+            payroll: groupedPayroll,
             selectedMonth: m,
-            selectedYear: y
+            selectedYear: y,
+            selectedPayrollDate
         });
     } catch (error) {
         console.error("Payroll Error:", error);

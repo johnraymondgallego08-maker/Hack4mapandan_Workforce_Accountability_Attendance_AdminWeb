@@ -55,17 +55,24 @@ function normalizeImagePath(value) {
 
     const trimmed = value.trim();
     if (!trimmed) return null;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image')) {
-        return trimmed;
+    const cleanedValue = trimmed.replace(/^['"`]+|['"`]+$/g, '').trim();
+    if (!cleanedValue) return null;
+    if (cleanedValue.startsWith('http://') || cleanedValue.startsWith('https://') || cleanedValue.startsWith('data:image')) {
+        return cleanedValue;
     }
 
-    const normalized = trimmed.replace(/\\/g, '/');
+    const normalized = cleanedValue.replace(/\\/g, '/');
     if (normalized.startsWith('/employee_images/')) return normalized;
     if (normalized.startsWith('employee_images/')) return `/${normalized}`;
+    if (normalized.startsWith('/uploads/')) return normalized;
+    if (normalized.startsWith('uploads/')) return `/${normalized}`;
 
     const publicIndex = normalized.toLowerCase().indexOf('/public/employee_images/');
     if (publicIndex >= 0) return normalized.slice(publicIndex + '/public'.length);
+    const uploadsIndex = normalized.toLowerCase().indexOf('/public/uploads/');
+    if (uploadsIndex >= 0) return normalized.slice(uploadsIndex + '/public'.length);
     if (normalized.toLowerCase().startsWith('public/employee_images/')) return normalized.slice('public'.length);
+    if (normalized.toLowerCase().startsWith('public/uploads/')) return normalized.slice('public'.length);
 
     return null;
 }
@@ -94,6 +101,9 @@ function resolveUserPhoto(id, data = {}, existingPhoto = null) {
         data.photoUrl,
         data.profileImage,
         data.img_url,
+        data.imgUrl,
+        data.image_url,
+        data['img url'],
         data.imageUrl,
         data.image,
         data.url,

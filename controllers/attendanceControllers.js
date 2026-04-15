@@ -57,18 +57,27 @@ function normalizeImagePath(value) {
 
     const trimmed = value.trim();
     if (!trimmed) return null;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image')) {
-        return trimmed;
+    const cleanedValue = trimmed.replace(/^['"`]+|['"`]+$/g, '').trim();
+    if (!cleanedValue) return null;
+    if (cleanedValue.startsWith('http://') || cleanedValue.startsWith('https://') || cleanedValue.startsWith('data:image')) {
+        return cleanedValue;
     }
 
-    const normalized = trimmed.replace(/\\/g, '/');
+    const normalized = cleanedValue.replace(/\\/g, '/');
     if (normalized.startsWith('/employee_images/')) return normalized;
     if (normalized.startsWith('employee_images/')) return `/${normalized}`;
+    if (normalized.startsWith('/uploads/')) return normalized;
+    if (normalized.startsWith('uploads/')) return `/${normalized}`;
     if (normalized.toLowerCase().startsWith('public/employee_images/')) return normalized.slice('public'.length);
+    if (normalized.toLowerCase().startsWith('public/uploads/')) return normalized.slice('public'.length);
 
     const publicIndex = normalized.toLowerCase().indexOf('/public/employee_images/');
     if (publicIndex >= 0) {
         return normalized.slice(publicIndex + '/public'.length);
+    }
+    const publicUploadsIndex = normalized.toLowerCase().indexOf('/public/uploads/');
+    if (publicUploadsIndex >= 0) {
+        return normalized.slice(publicUploadsIndex + '/public'.length);
     }
 
     return null;
@@ -76,7 +85,12 @@ function normalizeImagePath(value) {
 
 function localImageExists(value) {
     const normalized = normalizeImagePath(value);
-    if (!normalized || !normalized.startsWith('/employee_images/')) return false;
+    if (
+        !normalized ||
+        (!normalized.startsWith('/employee_images/') && !normalized.startsWith('/uploads/'))
+    ) {
+        return false;
+    }
 
     const absolutePath = path.join(__dirname, '../public', normalized.replace(/^\//, ''));
     return fs.existsSync(absolutePath);
@@ -98,17 +112,110 @@ function sanitizeEmployeeFolderName(value = '') {
         .replace(/^_+|_+$/g, '');
 }
 
-function buildPhotoKey(photo = {}) {
-    if (photo.timestamp) {
-        const ts = parseDate(photo.timestamp);
-        if (ts) {
-            const minuteDate = new Date(ts);
-            minuteDate.setSeconds(0, 0);
-            return `ts:${minuteDate.toISOString()}`;
+function canonicalizeImageSource(value = '') {
+    const normalized = normalizeImagePath(value);
+    if (!normalized) return '';
+
+    if (normalized.startsWith('data:image')) {
+        const shortFingerprint = normalized.slice(0, 80).toLowerCase();
+        return `data:${shortFingerprint}:${normalized.length}`;
+    }
+
+    if (isRemoteImagePath(normalized)) {
+        try {
+            const parsedUrl = new URL(normalized);
+            const pathname = parsedUrl.pathname.replace(/\/+/g, '/');
+            return `${parsedUrl.protocol}//${parsedUrl.host}${pathname}`.toLowerCase();
+        } catch (error) {
+            return normalized.split(/[?#]/)[0].replace(/\/+/g, '/').toLowerCase();
         }
     }
 
+    return normalized.split(/[?#]/)[0].replace(/\/+/g, '/').toLowerCase();
+}
+
+function extractNormalizedImageSourcesFromRecord(record = {}, seedCandidates = []) {
+    const collected = new Set();
+    const visited = new Set();
+    const IMAGE_KEY_PATTERN = /(image|img|photo|capture|verification|url)/i;
+
+    const addCandidate = (value) => {
+        const normalized = normalizeImagePath(value);
+        if (normalized) {
+            collected.add(normalized);
+        }
+    };
+
+    const walk = (value, keyHint = '', depth = 0) => {
+        if (value === null || value === undefined || depth > 5) return;
+
+        if (typeof value === 'string') {
+            if (
+                !keyHint ||
+                IMAGE_KEY_PATTERN.test(keyHint) ||
+                value.includes('/employee_images/') ||
+                value.includes('/uploads/') ||
+                value.startsWith('http://') ||
+                value.startsWith('https://') ||
+                value.startsWith('data:image')
+            ) {
+                addCandidate(value);
+            }
+            return;
+        }
+
+        if (Array.isArray(value)) {
+            value.forEach((entry) => walk(entry, keyHint, depth + 1));
+            return;
+        }
+
+        if (typeof value !== 'object') return;
+        if (visited.has(value)) return;
+        visited.add(value);
+
+        Object.entries(value).forEach(([key, nestedValue]) => {
+            const nestedKeyHint = keyHint ? `${keyHint}.${key}` : key;
+            const isImageLikeKey = IMAGE_KEY_PATTERN.test(String(key));
+
+            if (typeof nestedValue === 'string' && isImageLikeKey) {
+                addCandidate(nestedValue);
+                return;
+            }
+
+            if (typeof nestedValue === 'string') {
+                walk(nestedValue, nestedKeyHint, depth + 1);
+                return;
+            }
+
+            if (Array.isArray(nestedValue) || (nestedValue && typeof nestedValue === 'object')) {
+                walk(nestedValue, nestedKeyHint, depth + 1);
+            }
+        });
+    };
+
+    seedCandidates.forEach(addCandidate);
+    walk(record);
+
+    return Array.from(collected);
+}
+
+function buildPhotoKey(photo = {}) {
+    const sources = buildPhotoSources(photo);
+    const primarySource = canonicalizeImageSource(sources[0] || photo.path || '');
+
+    const ts = parseDate(photo.timestamp);
+    let minuteTimestamp = '';
+    if (ts) {
+        const minuteDate = new Date(ts);
+        minuteDate.setSeconds(0, 0);
+        minuteTimestamp = minuteDate.toISOString();
+    }
+
     const label = String(photo.label || '').trim().toLowerCase();
+    if (primarySource && minuteTimestamp) return `source:${primarySource}|minute:${minuteTimestamp}`;
+    if (primarySource) return `source:${primarySource}`;
+    if (minuteTimestamp && label) return `minute:${minuteTimestamp}|label:${label}`;
+    if (minuteTimestamp) return `minute:${minuteTimestamp}`;
     if (label) return `label:${label}`;
     return `path:${String(photo.path || '').trim().toLowerCase()}`;
 }
@@ -121,16 +228,24 @@ function buildPhotoSources(photo = {}) {
 }
 
 function buildUserProfileSources(user = {}, localProfile = null) {
-    return [
+    const directSources = [
         user.imageUrl,
+        user.imgUrl,
         user.photoUrl,
         user.profileImage,
         user.img_url,
+        user.image_url,
+        user['img url'],
         user.image,
         user.url,
         localProfile
     ]
         .map(normalizeImagePath)
+        .filter((source, index, list) => source && list.indexOf(source) === index);
+
+    const discoveredSources = extractNormalizedImageSourcesFromRecord(user);
+
+    return [...directSources, ...discoveredSources]
         .filter((source, index, list) => source && list.indexOf(source) === index);
 }
 
@@ -224,8 +339,8 @@ function getLocalEmployeeImages({ userId = '', name = '' } = {}) {
                 captures.push({
                     path: `/employee_images/${folder.name}/${fileName}`,
                     label: timestamp
-                        ? timestamp.toLocaleDateString('en-US') + ' ' + timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                        : 'Captured',
+                        ? `Verification - ${timestamp.toLocaleDateString('en-US')} ${timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                        : 'Verification',
                     timestamp
                 });
             });
@@ -240,6 +355,38 @@ function getLocalEmployeeImages({ userId = '', name = '' } = {}) {
         });
 
     return { profile, captures: uniqueCaptures };
+}
+
+async function fetchAttendanceDocsForImageRecognition() {
+    const PAGE_SIZE = 1000;
+    const orderedDocs = [];
+    let lastDoc = null;
+
+    try {
+        while (true) {
+            let query = db.collection('attendance')
+                .orderBy('timestamp', 'desc')
+                .limit(PAGE_SIZE);
+
+            if (lastDoc) {
+                query = query.startAfter(lastDoc);
+            }
+
+            const snapshot = await query.get();
+            if (snapshot.empty) break;
+
+            orderedDocs.push(...snapshot.docs);
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+            if (snapshot.size < PAGE_SIZE) break;
+        }
+
+        return orderedDocs;
+    } catch (queryError) {
+        console.warn('[IMAGE RECOGNITION] Ordered pagination failed, falling back to unordered fetch:', queryError.message);
+        const fallbackSnapshot = await db.collection('attendance').get();
+        return fallbackSnapshot.docs;
+    }
 }
 
 function startOfDay(date) {
@@ -710,33 +857,27 @@ exports.deviceRecognition = async (req, res) => {
 exports.imageRecognition = async (req, res) => {
     try {
         const usersPromise = userModel.getEmployeeUsers();
-        let attendanceSnap;
-
-        try {
-            attendanceSnap = await db.collection('attendance')
-                .orderBy('timestamp', 'desc')
-                .limit(5000)
-                .get();
-        } catch (queryError) {
-            console.warn('[IMAGE RECOGNITION] Ordered query failed, falling back to unordered fetch:', queryError.message);
-            attendanceSnap = await db.collection('attendance').limit(5000).get();
-        }
+        const attendanceDocs = await fetchAttendanceDocsForImageRecognition();
 
         const users = await usersPromise;
 
-        const capturesByEmployee = new Map();
-        attendanceSnap.forEach(doc => {
-            const data = doc.data();
+        const capturesByEmployee = new Map(); // employeeId -> Map<photoKey, photo>
+        const employeeMetaById = new Map();
+        attendanceDocs.forEach(doc => {
+            const data = doc.data() || {};
             const coords = data.coords || {};
             const empId = String(data.employeeId || data.userId || coords.employeeId || coords.userId || '').trim();
             if (!empId) return;
 
-            const photoUrl = [
+            const photoSources = extractNormalizedImageSourcesFromRecord(data, [
                 data.verification_photo,
                 data.verificationPhoto,
                 data.photoUrl,
                 data.profileImage,
                 data.img_url,
+                data.imgUrl,
+                data.image_url,
+                data['img url'],
                 data.image,
                 data.imageUrl,
                 data.url,
@@ -745,35 +886,65 @@ exports.imageRecognition = async (req, res) => {
                 coords.verificationPhoto,
                 coords.photoUrl,
                 coords.profileImage,
+                coords.img_url,
+                coords.imgUrl,
+                coords.image_url,
+                coords['img url'],
                 coords.image,
                 coords.imageUrl,
                 coords.url
-            ]
-                .map(normalizeImagePath)
-                .find(Boolean);
-            if (!photoUrl) return;
+            ]);
+            if (!photoSources.length) return;
 
             const ts = parseDate(data.timestamp || data.timeIn || data.date || doc.createTime);
             const label = ts
-                ? ts.toLocaleDateString('en-US') + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                : 'Captured';
+                ? `Verification - ${ts.toLocaleDateString('en-US')} ${ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                : 'Verification';
+            const employeeName = String(
+                data.employeeName ||
+                data.name ||
+                coords.employeeName ||
+                coords.name ||
+                'Unknown Employee'
+            ).trim() || 'Unknown Employee';
 
-            if (!capturesByEmployee.has(empId)) {
-                capturesByEmployee.set(empId, []);
+            if (!employeeMetaById.has(empId)) {
+                employeeMetaById.set(empId, {
+                    employeeId: empId,
+                    name: employeeName
+                });
             }
 
-            const existing = capturesByEmployee.get(empId);
-            const lastCapture = existing[existing.length - 1];
+            if (!capturesByEmployee.has(empId)) {
+                capturesByEmployee.set(empId, new Map());
+            }
 
-            if (existing.some(photo => photo.path === photoUrl)) return;
-            if (lastCapture && ts && lastCapture.timestamp && Math.abs(lastCapture.timestamp - ts) < 60000) return;
+            const employeePhotoMap = capturesByEmployee.get(empId);
 
-            existing.push({ path: photoUrl, label, id: doc.id, timestamp: ts });
+            photoSources.forEach((photoUrl) => {
+                const photo = {
+                    path: photoUrl,
+                    label,
+                    id: doc.id,
+                    timestamp: ts,
+                    sources: [photoUrl]
+                };
+                upsertPhoto(employeePhotoMap, photo, buildPhotoKey(photo));
+            });
         });
 
+        const seenEmployeeIds = new Set();
         const usersWithGallery = users.map(user => {
             const localImages = getLocalEmployeeImages({ userId: user.id, name: user.name });
             const photoMap = new Map();
+            const candidateEmployeeIds = [
+                user.id,
+                user.uid,
+                user.employeeId,
+                user.employeeCode
+            ]
+                .map(value => String(value || '').trim())
+                .filter((value, index, list) => value && list.indexOf(value) === index);
 
             const profileSources = buildUserProfileSources(user, localImages.profile);
 
@@ -782,7 +953,7 @@ exports.imageRecognition = async (req, res) => {
                     path: profileSources.find(source => localImageExists(source)) || profileSources[0],
                     label: 'Current Profile',
                     sources: profileSources
-                }, 'label:profile');
+                });
             }
 
             localImages.captures.forEach((photo) => {
@@ -794,15 +965,20 @@ exports.imageRecognition = async (req, res) => {
                 }
             });
 
-            (capturesByEmployee.get(user.id) || []).forEach((photo) => {
-                const key = buildPhotoKey(photo);
-                upsertPhoto(photoMap, {
-                    ...photo,
-                    sources: [photo.path]
-                }, key);
+            candidateEmployeeIds.forEach((candidateId) => {
+                seenEmployeeIds.add(candidateId);
+                const employeeRemotePhotos = capturesByEmployee.get(candidateId) || new Map();
+                employeeRemotePhotos.forEach((photo) => {
+                    const key = buildPhotoKey(photo);
+                    upsertPhoto(photoMap, {
+                        ...photo,
+                        sources: Array.isArray(photo.sources) && photo.sources.length ? photo.sources : [photo.path]
+                    }, key);
+                });
             });
 
-            const uniquePhotos = Array.from(photoMap.values())
+            const uniquePhotos = Array.from(photoMap.entries())
+                .map(([photoKey, photo]) => ({ ...photo, photoKey }))
                 .filter(photo => photo.path)
                 .sort((a, b) => {
                     if (String(a.label).toLowerCase().includes('profile')) return -1;
@@ -814,6 +990,32 @@ exports.imageRecognition = async (req, res) => {
 
             return { ...user, photos: uniquePhotos };
         });
+
+        capturesByEmployee.forEach((photoMap, employeeId) => {
+            if (seenEmployeeIds.has(employeeId)) return;
+
+            const meta = employeeMetaById.get(employeeId) || {};
+            const uniquePhotos = Array.from(photoMap.entries())
+                .map(([photoKey, photo]) => ({ ...photo, photoKey }))
+                .filter(photo => photo.path)
+                .sort((a, b) => {
+                    const aTime = a.timestamp ? parseDate(a.timestamp)?.getTime() || 0 : 0;
+                    const bTime = b.timestamp ? parseDate(b.timestamp)?.getTime() || 0 : 0;
+                    return bTime - aTime;
+                });
+
+            if (!uniquePhotos.length) return;
+
+            usersWithGallery.push({
+                id: employeeId,
+                employeeId,
+                name: meta.name || employeeId,
+                role: 'Employee',
+                photos: uniquePhotos
+            });
+        });
+
+        usersWithGallery.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
         res.render('image-recognition', { users: usersWithGallery });
     } catch (error) {

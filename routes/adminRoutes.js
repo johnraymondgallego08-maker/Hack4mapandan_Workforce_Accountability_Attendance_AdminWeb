@@ -5,6 +5,7 @@ const userController = require("../controllers/userController");
 const leaveController = require("../controllers/leaveController");
 const payrollController = require("../controllers/payrollController");
 const attendanceController = require("../controllers/attendanceControllers");
+const eventAnnouncementController = require("../controllers/eventAnnouncementController");
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const adminMiddleware = require("../middlewares/adminMiddleware");
@@ -35,6 +36,14 @@ router.get("/manage-leave", adminMiddleware.isAdmin, leaveController.manageLeave
 router.post("/leave/approve/:id", adminMiddleware.isAdmin, leaveController.approveLeave);
 router.post("/leave/reject/:id", adminMiddleware.isAdmin, leaveController.rejectLeave);
 router.post("/leave/delete/:id", adminMiddleware.isAdmin, leaveController.deleteLeave);
+router.get("/manage-events", adminMiddleware.isAdmin, eventAnnouncementController.manageEvents);
+router.post(
+    "/manage-events/create",
+    adminMiddleware.isAdmin,
+    upload.single('coverImage'),
+    eventAnnouncementController.createEvent
+);
+router.post("/manage-events/delete/:id", adminMiddleware.isAdmin, eventAnnouncementController.deleteEvent);
 router.get("/manage-payroll", adminMiddleware.isAdmin, payrollController.managePayroll);
 // Debug endpoint to scan payroll documents and report available months (admin-only)
 router.get('/debug/payroll-scan', adminMiddleware.isAdmin, payrollController.debugPayrollScan);

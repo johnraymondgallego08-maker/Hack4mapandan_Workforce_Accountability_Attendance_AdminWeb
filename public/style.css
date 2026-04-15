@@ -741,6 +741,29 @@ th {
     line-height: 1.35;
 }
 
+.table-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.table-heading__icon {
+    width: 0.92rem;
+    height: 0.92rem;
+    color: var(--primary);
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+
+.table-heading__label {
+    display: inline-block;
+}
+
+th .sort-indicator {
+    margin-left: 0.45rem;
+}
+
 td {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--border-glass);
@@ -2059,4 +2082,3 @@ body.auth-page::after {
 .btn-delete svg {
     stroke: #ffffff !important;
 }
-

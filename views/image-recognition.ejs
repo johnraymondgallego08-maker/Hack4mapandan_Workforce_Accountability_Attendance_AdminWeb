@@ -16,6 +16,7 @@
         <div style="display: flex; flex-direction: column; gap: 1.5rem;">
             <% users.forEach(user => { %>
                 <details class="employee-folder card" style="padding: 0; overflow: hidden;"
+                    <%= user.photos && user.photos.length > 0 ? 'open' : '' %>
                     data-name="<%= (user.name || '').toLowerCase() %>">
 
                     <summary
@@ -34,7 +35,7 @@
                                 <div
                                     style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
                                     <%= user.role || 'Personnel' %> &nbsp;|&nbsp;
-                                    <span style="color: var(--accent-indigo); font-weight: 700;">
+                                    <span class="photo-count" style="color: var(--accent-indigo); font-weight: 700;">
                                         <%= (user.photos && user.photos.length) || 0 %> photo<%= (user.photos && user.photos.length !== 1) ? 's' : '' %>
                                     </span>
                                 </div>
@@ -52,9 +53,11 @@
                                 <% user.photos.forEach(photo => { %>
                                     <button type="button"
                                         class="image-card-button"
+                                        data-photo-key="<%= photo.photoKey || '' %>"
                                         data-lightbox-label='<%- JSON.stringify(`${user.name || "Employee"} - ${photo.label}`) %>'
                                         style="position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-glass); cursor: pointer; padding: 0; background: transparent; width: 100%;">
                                         <img src="<%= photo.path %>" alt="<%= photo.label %>" loading="lazy"
+                                            data-photo-key="<%= photo.photoKey || '' %>"
                                             data-fallbacks='<%- JSON.stringify(photo.sources || [photo.path]) %>'
                                             style="width: 100%; height: 160px; object-fit: cover; display: block; transition: transform 0.3s;"
                                             onerror="handleImageFallback(this)">
@@ -115,6 +118,50 @@
 </div>
 
 <script>
+    const IMAGE_GALLERY_CACHE_KEY = 'image-recognition-gallery-v1';
+    const IMAGE_SOURCE_CACHE_KEY = 'image-recognition-resolved-sources-v1';
+    const MAX_IMAGE_CACHE_ENTRIES = 1200;
+
+    function safeReadJsonFromLocalStorage(key, fallbackValue) {
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) return fallbackValue;
+            return JSON.parse(raw);
+        } catch (error) {
+            return fallbackValue;
+        }
+    }
+
+    function safeWriteJsonToLocalStorage(key, value) {
+        try {
+            window.localStorage.setItem(key, JSON.stringify(value));
+        } catch (error) {
+            // Ignore storage quota and serialization errors.
+        }
+    }
+
+    function readResolvedSourceCache() {
+        const parsed = safeReadJsonFromLocalStorage(IMAGE_SOURCE_CACHE_KEY, {});
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        return parsed;
+    }
+
+    function writeResolvedSourceCache(cache) {
+        const entries = Object.entries(cache || {});
+        const trimmed = entries.slice(Math.max(0, entries.length - MAX_IMAGE_CACHE_ENTRIES));
+        safeWriteJsonToLocalStorage(IMAGE_SOURCE_CACHE_KEY, Object.fromEntries(trimmed));
+    }
+
+    function getImageKey(imageElement) {
+        if (!imageElement) return '';
+        const explicitKey = String(imageElement.dataset.photoKey || '').trim();
+        if (explicitKey) return explicitKey;
+
+        const src = String(imageElement.currentSrc || imageElement.src || '').trim();
+        if (!src) return '';
+        return src.split('#')[0].split('?')[0].toLowerCase();
+    }
+
     function openLightbox(src, label) {
         document.getElementById('lightbox-img').src = src;
         document.getElementById('lightbox-label').textContent = label;
@@ -146,6 +193,13 @@
             return;
         }
 
+        const cache = readResolvedSourceCache();
+        const cachedSource = cache[getImageKey(image)];
+        if (cachedSource && cachedSource !== image.src) {
+            image.src = cachedSource;
+            return;
+        }
+
         image.onerror = null;
         image.src = placeholder;
     }
@@ -164,6 +218,41 @@
         const lightbox = document.getElementById('lightbox');
         const lightboxImage = document.getElementById('lightbox-img');
         const lightboxClose = document.getElementById('lightbox-close');
+        const resolvedSourceCache = readResolvedSourceCache();
+
+        const dedupeRenderedCards = () => {
+            document.querySelectorAll('.employee-folder').forEach((folder) => {
+                const seenKeys = new Set();
+
+                folder.querySelectorAll('.image-card-button').forEach((button) => {
+                    const image = button.querySelector('img');
+                    if (!image) return;
+
+                    const key = getImageKey(image);
+                    if (!key) return;
+
+                    if (seenKeys.has(key)) {
+                        button.remove();
+                        return;
+                    }
+
+                    seenKeys.add(key);
+                });
+            });
+        };
+
+        const refreshFolderPhotoCounts = () => {
+            document.querySelectorAll('.employee-folder').forEach((folder) => {
+                const count = folder.querySelectorAll('.image-card-button').length;
+                const countLabel = folder.querySelector('.photo-count');
+                if (countLabel) {
+                    countLabel.textContent = `${count} photo${count === 1 ? '' : 's'}`;
+                }
+            });
+        };
+
+        dedupeRenderedCards();
+        refreshFolderPhotoCounts();
 
         const folderSearch = document.getElementById('folderSearch');
         if (folderSearch) {
@@ -186,6 +275,62 @@
                 }
                 openLightboxFromCard(button, label);
             });
+        });
+
+        document.querySelectorAll('.image-card-button img').forEach((image) => {
+            const key = getImageKey(image);
+            if (!key) return;
+
+            const cachedSource = resolvedSourceCache[key];
+            if (cachedSource) {
+                let fallbacks = [];
+                try {
+                    fallbacks = JSON.parse(image.dataset.fallbacks || '[]');
+                } catch (error) {
+                    fallbacks = [];
+                }
+
+                if (!fallbacks.includes(cachedSource)) {
+                    fallbacks.push(cachedSource);
+                    image.dataset.fallbacks = JSON.stringify(fallbacks);
+                }
+            }
+
+            image.addEventListener('load', () => {
+                const source = String(image.currentSrc || image.src || '').trim();
+                if (!source) return;
+
+                const currentCache = readResolvedSourceCache();
+                currentCache[key] = source;
+                writeResolvedSourceCache(currentCache);
+            }, { once: true });
+        });
+
+        const gallerySnapshot = Array.from(document.querySelectorAll('.image-card-button')).map((button) => {
+            const image = button.querySelector('img');
+            if (!image) return null;
+
+            const src = String(image.currentSrc || image.src || '').trim();
+            if (!src) return null;
+
+            let label = 'Employee photo';
+            try {
+                label = JSON.parse(button.dataset.lightboxLabel || '"Employee photo"');
+            } catch (error) {
+                label = button.dataset.lightboxLabel || 'Employee photo';
+            }
+
+            return {
+                key: getImageKey(image),
+                src,
+                label
+            };
+        }).filter(Boolean);
+
+        safeWriteJsonToLocalStorage(IMAGE_GALLERY_CACHE_KEY, {
+            updatedAt: new Date().toISOString(),
+            count: gallerySnapshot.length,
+            items: gallerySnapshot
         });
 
         if (lightbox) {

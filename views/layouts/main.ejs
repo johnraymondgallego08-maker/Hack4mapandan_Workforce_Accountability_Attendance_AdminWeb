@@ -132,6 +132,11 @@
                         </a>
                     </li>
                     <li>
+                        <a href="/manage-events" class="<%= path === '/manage-events' ? 'active' : '' %>" aria-current="<%= path === '/manage-events' ? 'page' : 'false' %>">
+                            <i data-lucide="megaphone"></i> <span>Events</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="/manage-payroll" class="<%= path === '/manage-payroll' ? 'active' : '' %>" aria-current="<%= path === '/manage-payroll' ? 'page' : 'false' %>">
                             <i data-lucide="banknote"></i> <span>Payroll</span>
                         </a>
@@ -170,6 +175,67 @@
             <% } %>
 
             <script>
+                function resolveTableHeaderIcon(headerText) {
+                    const text = String(headerText || '').trim().toLowerCase();
+                    if (!text) return null;
+
+                    if (text.includes('employee') || text.includes('user') || text.includes('personnel') || text.includes('name')) return 'users';
+                    if (text.includes('date') || text.includes('month') || text.includes('period')) return 'calendar-days';
+                    if (text.includes('time')) return 'clock-3';
+                    if (text.includes('hour')) return 'hourglass';
+                    if (text.includes('salary') || text.includes('pay') || text.includes('bonus') || text.includes('deduction') || text.includes('amount')) return 'banknote';
+                    if (text.includes('status')) return 'badge-check';
+                    if (text.includes('action')) return 'wrench';
+                    if (text.includes('device')) return 'tablet';
+                    if (text.includes('leave')) return 'calendar-minus';
+                    if (text.includes('role')) return 'shield';
+                    if (text.includes('department') || text.includes('position')) return 'briefcase';
+                    if (text.includes('attendance')) return 'clipboard-check';
+                    if (text === 'id' || text.endsWith(' id')) return 'hash';
+                    return 'columns-3';
+                }
+
+                function enhanceTableHeaders() {
+                    document.querySelectorAll('table thead th').forEach((header) => {
+                        if (header.dataset.iconEnhanced === 'true') return;
+
+                        const label = Array.from(header.childNodes)
+                            .filter((node) => node.nodeType === Node.TEXT_NODE)
+                            .map((node) => node.textContent)
+                            .join(' ')
+                            .replace(/\s+/g, ' ')
+                            .trim() || header.textContent.replace(/\s+/g, ' ').trim();
+
+                        if (!label) return;
+
+                        const iconName = resolveTableHeaderIcon(label);
+                        if (!iconName) return;
+
+                        const wrapper = document.createElement('span');
+                        wrapper.className = 'table-heading';
+
+                        const icon = document.createElement('i');
+                        icon.setAttribute('data-lucide', iconName);
+                        icon.className = 'table-heading__icon';
+
+                        const text = document.createElement('span');
+                        text.className = 'table-heading__label';
+                        text.textContent = label;
+
+                        wrapper.appendChild(icon);
+                        wrapper.appendChild(text);
+
+                        Array.from(header.childNodes)
+                            .filter((node) => node.nodeType === Node.TEXT_NODE)
+                            .forEach((node) => header.removeChild(node));
+
+                        header.insertBefore(wrapper, header.firstChild);
+                        header.dataset.iconEnhanced = 'true';
+                    });
+                }
+
+                enhanceTableHeaders();
+
                 // Initialize Lucide icons
                 lucide.createIcons();
 
