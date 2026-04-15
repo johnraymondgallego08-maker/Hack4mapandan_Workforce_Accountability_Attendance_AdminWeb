@@ -427,7 +427,18 @@
                 });
 
                 window.confirmDelete = (form, title = 'Are you sure?', text = "This action cannot be undone.") => {
-                    if (event) event.preventDefault();
+                    const currentEvent = (typeof event !== 'undefined') ? event : null;
+                    if (currentEvent && typeof currentEvent.preventDefault === 'function') currentEvent.preventDefault();
+                    // Fallback to native confirm if Swal not available
+                    if (typeof Swal === 'undefined') {
+                        const ok = window.confirm(title + '\n\n' + text);
+                        if (ok) {
+                            form.dataset.confirmed = 'true';
+                            form.submit();
+                        }
+                        return;
+                    }
+
                     Swal.fire({
                         ...buildSwalOptions({
                             title,
@@ -438,12 +449,49 @@
                             accent: 'danger'
                         })
                     }).then((result) => {
-                        if (result.isConfirmed) form.submit();
+                        if (result.isConfirmed) {
+                            // mark to avoid re-prompt on the programmatic submit
+                            try { form.dataset.confirmed = 'true'; } catch (e) {}
+                            form.submit();
+                        }
                     });
                 };
 
+                // Global capture handler: intercept any form that looks like a delete action
+                document.addEventListener('submit', (e) => {
+                    try {
+                        const form = e.target;
+                        if (!form || form.tagName !== 'FORM') return;
+                        if (form.dataset.noConfirm === 'true') return;
+
+                        const action = String(form.getAttribute('action') || '').toLowerCase();
+                        const hasDeleteInAction = action.includes('/delete/');
+                        const hasDeleteButton = !!form.querySelector('.btn-delete');
+
+                        if (!hasDeleteInAction && !hasDeleteButton) return;
+
+                        // If already confirmed programmatically, allow submit and clear flag
+                        if (form.dataset.confirmed === 'true') {
+                            try { form.removeAttribute('data-confirmed'); } catch (err) {}
+                            return;
+                        }
+
+                        // Prevent other handlers (including inline onsubmit) from running twice
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+
+                        const title = form.dataset.confirmTitle || 'Confirm deletion';
+                        const text = form.dataset.confirmText || 'This will permanently remove the item. Proceed?';
+                        window.confirmDelete(form, title, text);
+                    } catch (err) {
+                        // if anything goes wrong, allow normal submit
+                        return;
+                    }
+                }, true);
+
                 window.confirmUpdate = (form, title = 'Confirm Update', text = "Save these changes?") => {
-                    if (event) event.preventDefault();
+                    const currentEvent = (typeof event !== 'undefined') ? event : null;
+                    if (currentEvent && typeof currentEvent.preventDefault === 'function') currentEvent.preventDefault();
                     Swal.fire({
                         ...buildSwalOptions({
                             title,
@@ -454,7 +502,10 @@
                             accent: 'primary'
                         })
                     }).then((result) => {
-                        if (result.isConfirmed) form.submit();
+                        if (result.isConfirmed) {
+                            try { form.dataset.confirmed = 'true'; } catch (e) {}
+                            form.submit();
+                        }
                     });
                 };
             </script>

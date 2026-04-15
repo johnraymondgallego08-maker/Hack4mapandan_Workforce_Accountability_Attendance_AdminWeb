@@ -2,6 +2,9 @@ const userModel = require('../models/userModel');
 // To robustly handle module loading and prevent circular dependency issues
 // that can cause `admin` to be undefined, we import the entire module.
 const firebaseAdmin = require('../config/firebaseAdmin');
+const fs = require('fs');
+const fsp = fs.promises;
+const path = require('path');
 
 function isAdminLikeRole(roleValue) {
     const role = String(roleValue || '').trim().toLowerCase();
@@ -86,22 +89,24 @@ exports.updateProfile = async (req, res) => {
 
         // Handle Profile Image
         if (req.file) {
-            const fs = require('fs');
-            const path = require('path');
             const user = await userModel.getUserById(userId);
             // Use the name from body or existing user data, fallback to 'Unknown'
             const folderBaseName = (name || (user ? user.name : null) || 'Unknown').replace(/[^a-z0-9]/gi, '_');
             const folderName = `${folderBaseName}_${userId}`;
             const targetDir = path.join(__dirname, '../public/employee_images', folderName);
 
-            if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true });
+            try {
+                await fsp.mkdir(targetDir, { recursive: true });
+                const targetPath = path.join(targetDir, 'profile.jpg');
+                await fsp.rename(req.file.path, targetPath);
+                dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
+                dbUpdates.photoUrl = dbUpdates.profileImage; // Keep both in sync
+            } catch (err) {
+                console.error('Failed to save profile image:', err);
+                try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
+                req.flash('error', 'Failed to save profile image.');
+                return res.redirect('/user-info');
             }
-
-            const targetPath = path.join(targetDir, 'profile.jpg');
-            fs.renameSync(req.file.path, targetPath);
-            dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
-            dbUpdates.photoUrl = dbUpdates.profileImage; // Keep both in sync
         }
 
         // Remove undefined fields
@@ -230,16 +235,21 @@ exports.updateUser = async (req, res) => {
 
         // 3. Handle Profile Photo Upload → save to employee's own folder
         if (req.file) {
-            const fs = require('fs');
-            const path = require('path');
             const safeName = (name || 'Unknown').replace(/[^a-z0-9]/gi, '_');
             const folderName = `${safeName}_${userId}`;
             const targetDir = path.join(__dirname, '../public/employee_images', folderName);
-            if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-            const targetPath = path.join(targetDir, 'profile.jpg');
-            fs.renameSync(req.file.path, targetPath);
-            dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
-            dbUpdates.photoUrl = dbUpdates.profileImage;
+            try {
+                await fsp.mkdir(targetDir, { recursive: true });
+                const targetPath = path.join(targetDir, 'profile.jpg');
+                await fsp.rename(req.file.path, targetPath);
+                dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
+                dbUpdates.photoUrl = dbUpdates.profileImage;
+            } catch (err) {
+                console.error('Failed to save profile image:', err);
+                try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
+                req.flash('error', 'Failed to save profile image.');
+                return res.redirect('/manage-users');
+            }
         }
 
         if (Object.keys(dbUpdates).length > 0) {
@@ -285,8 +295,7 @@ exports.deleteUser = async (req, res) => {
         req.flash('success', 'User deleted successfully.');
     } catch (error) {
         console.error("Error deleting user:", error);
-        // Even if there's a system error, we treat it as success for the UI to clear the list
-        req.flash('success', 'User removed from list.');
+        req.flash('error', 'Failed to delete user: ' + (error && error.message ? error.message : 'unknown error'));
     }
     res.redirect('/manage-users');
 };

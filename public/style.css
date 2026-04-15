@@ -560,6 +560,20 @@ button.is-submitting::after,
     flex-wrap: wrap;
 }
 
+/* Events page grid: create form + records list */
+.events-grid {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .events-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .page-header h1 {
     font-size: clamp(2rem, 3vw, 2.8rem);
     font-weight: 800;

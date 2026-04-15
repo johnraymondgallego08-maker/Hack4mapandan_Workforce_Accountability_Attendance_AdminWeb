@@ -9,11 +9,21 @@ const eventAnnouncementController = require("../controllers/eventAnnouncementCon
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const adminMiddleware = require("../middlewares/adminMiddleware");
+const securityMiddleware = require('../middlewares/securityMiddleware');
 const multer = require('multer');
 const path = require('path');
 
 // Temp storage — controller will move file to correct employee folder
-const upload = multer({ dest: path.join(__dirname, '../public/uploads/') });
+// Add limits and fileFilter to avoid invalid uploads
+const upload = multer({
+    dest: path.join(__dirname, '../public/uploads/'),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (allowed.includes(String(file.mimetype || '').toLowerCase())) return cb(null, true);
+        return cb(new Error('Only image uploads are allowed'));
+    }
+});
 
 router.use(authMiddleware.isAuthenticated);
 
@@ -25,6 +35,7 @@ router.post(
     '/users/edit/:id',
     adminMiddleware.isAdmin,
     upload.single('profileImage'),
+    securityMiddleware.verifyCsrfToken,
     userController.updateUser
 );
 router.post('/users/delete/:id', adminMiddleware.isAdmin, userController.deleteUser);
@@ -37,12 +48,22 @@ router.post("/leave/approve/:id", adminMiddleware.isAdmin, leaveController.appro
 router.post("/leave/reject/:id", adminMiddleware.isAdmin, leaveController.rejectLeave);
 router.post("/leave/delete/:id", adminMiddleware.isAdmin, leaveController.deleteLeave);
 router.get("/manage-events", adminMiddleware.isAdmin, eventAnnouncementController.manageEvents);
+router.get("/manage-events/edit/:id", adminMiddleware.isAdmin, eventAnnouncementController.editEventPage);
 router.post(
     "/manage-events/create",
     adminMiddleware.isAdmin,
     upload.single('coverImage'),
+    securityMiddleware.verifyCsrfToken,
     eventAnnouncementController.createEvent
 );
+router.post(
+    "/manage-events/edit/:id",
+    adminMiddleware.isAdmin,
+    upload.single('coverImage'),
+    securityMiddleware.verifyCsrfToken,
+    eventAnnouncementController.updateEvent
+);
+// status toggle route removed — toggling handled via edit page/actions
 router.post("/manage-events/delete/:id", adminMiddleware.isAdmin, eventAnnouncementController.deleteEvent);
 router.get("/manage-payroll", adminMiddleware.isAdmin, payrollController.managePayroll);
 // Debug endpoint to scan payroll documents and report available months (admin-only)

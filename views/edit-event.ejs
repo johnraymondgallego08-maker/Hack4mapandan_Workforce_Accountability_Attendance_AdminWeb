@@ -1,0 +1,76 @@
+<div class="page-container" style="max-width: 760px; margin: 0 auto;">
+    <div class="page-header" style="margin-bottom: 2rem; text-align: center;">
+        <div>
+            <h1>Edit Event or Announcement</h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Update the content, replace the cover photo, or change the status from draft to public.</p>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 2rem;">
+        <form action="/manage-events/edit/<%= record.id %>" method="POST" enctype="multipart/form-data" onsubmit="confirmUpdate(this, 'Update Post', 'Save these changes to the event or announcement?')">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <label for="type" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Type</label>
+                    <select id="type" name="type" required>
+                        <option value="announcement" <%= record.type === 'announcement' ? 'selected' : '' %>>Announcement</option>
+                        <option value="event" <%= record.type === 'event' ? 'selected' : '' %>>Event</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="status" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Status</label>
+                    <select id="status" name="status" required>
+                        <option value="Public" <%= record.status === 'Public' ? 'selected' : '' %>>Public</option>
+                        <option value="Draft" <%= record.status === 'Draft' ? 'selected' : '' %>>Draft</option>
+                    </select>
+                </div>
+            </div>
+
+            <label for="title" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Title</label>
+            <input type="text" id="title" name="title" value="<%= record.title || '' %>" required>
+
+            <label for="summary" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Summary</label>
+            <textarea id="summary" name="summary" rows="3"><%= record.summary || '' %></textarea>
+
+            <label for="content" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Content</label>
+            <textarea id="content" name="content" rows="6"><%= record.content || '' %></textarea>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <label for="eventDate" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Date</label>
+                    <input type="date" id="eventDate" name="eventDate" value="<%= record.eventDateInput || '' %>">
+                </div>
+                <div>
+                    <label for="eventTime" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Time</label>
+                    <input type="time" id="eventTime" name="eventTime" value="<%= record.eventTime || '' %>">
+                </div>
+            </div>
+
+            <label for="location" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Location</label>
+            <input type="text" id="location" name="location" value="<%= record.location || '' %>">
+
+            <% if (record.imageUrl) { %>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-weight: 700; margin-bottom: 0.45rem;">Current Cover Photo</label>
+                    <div style="width: 100%; max-width: 320px; height: 190px; overflow: hidden; border-radius: 1rem; border: 1px solid var(--border-glass); background: rgba(109, 40, 217, 0.06);">
+                        <img src="<%= record.imageUrl %>" alt="<%= record.title %>" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                </div>
+            <% } %>
+
+            <label for="coverImage" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Replace Cover Photo</label>
+            <input type="file" id="coverImage" name="coverImage" accept="image/*">
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Update Post</button>
+                <a href="/manage-events" class="btn" style="flex: 1; text-align: center; text-decoration: none; background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: var(--text-muted);">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+    });
+</script>

@@ -1,8 +1,14 @@
 const leaveModel = require('../models/leaveModel');
 
 exports.manageLeave = async (req, res) => {
-    const leaves = await leaveModel.getAll();
-    res.render('manage-leave', { leaves });
+    try {
+        const leaves = await leaveModel.getAll();
+        res.render('manage-leave', { leaves });
+    } catch (error) {
+        console.error('Error loading leave list:', error);
+        req.flash('error', 'Failed to load leave requests.');
+        res.render('manage-leave', { leaves: [] });
+    }
 };
 
 exports.approveLeave = async (req, res) => {
