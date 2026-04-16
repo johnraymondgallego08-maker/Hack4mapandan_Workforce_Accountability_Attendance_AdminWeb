@@ -3,41 +3,20 @@ const fsp = fs.promises;
 const path = require('path');
 const sanitizeHtml = require('sanitize-html');
 const eventAnnouncementModel = require('../models/eventAnnouncementModel');
-const { admin } = require('../config/firebaseAdmin');
+
+// Supabase client (must be configured for cloud storage)
+let supabase = null;
+const supabaseBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_BUCKET || null;
+try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+        const { createClient } = require('@supabase/supabase-js');
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    }
+} catch (e) {
+    supabase = null;
+}
 
 const EVENT_UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads', 'events-announcements');
-
-let bucket = null;
-try {
-    if (admin && admin.storage) {
-        const configured = process.env.FIREBASE_STORAGE_BUCKET || undefined;
-        bucket = configured ? admin.storage().bucket(configured) : (admin.storage().bucket ? admin.storage().bucket() : null);
-    }
-} catch (e) { bucket = null; }
-
-let _bucketChecked = false;
-let _bucketAvailable = false;
-
-async function ensureBucketAvailable() {
-    if (_bucketChecked) return _bucketAvailable;
-    _bucketChecked = true;
-    if (!bucket) return (_bucketAvailable = false);
-
-    try {
-        const [exists] = await bucket.exists();
-        _bucketAvailable = !!exists;
-        if (!_bucketAvailable) {
-            console.warn('[EVENT] Configured Firebase Storage bucket not found, falling back to local storage.');
-            bucket = null;
-        }
-    } catch (err) {
-        console.error('[EVENT] Error checking storage bucket availability:', err && err.message ? err.message : err);
-        bucket = null;
-        _bucketAvailable = false;
-    }
-
-    return _bucketAvailable;
-}
 
 function sanitizeFileName(value = '') {
     return String(value || '')
@@ -99,29 +78,46 @@ exports.createEvent = async (req, res) => {
                 const fileName = `${base}-${Date.now()}${extension}`;
                 const destPath = `events-announcements/${fileName}`;
 
-                if (bucket && await ensureBucketAvailable()) {
+                if (supabase && supabaseBucket) {
                     try {
-                        await bucket.upload(req.file.path, { destination: destPath, metadata: { contentType: req.file.mimetype } });
-                        try { await bucket.file(destPath).makePublic(); } catch (e) {}
+                        const buffer = await fsp.readFile(req.file.path);
+                        const { data: uploadData, error: uploadError } = await supabase.storage.from(supabaseBucket).upload(destPath, buffer, { contentType: req.file.mimetype, upsert: false });
+                        if (uploadError) throw uploadError;
+                        const { data: publicData } = supabase.storage.from(supabaseBucket).getPublicUrl(destPath);
                         data.imagePath = destPath;
-                        data.imageUrl = `https://storage.googleapis.com/${bucket.name}/${destPath}`;
+                        data.imageUrl = (publicData && publicData.publicUrl) ? publicData.publicUrl : null;
+                        data.imageStorage = 'supabase';
                         try { await fsp.unlink(req.file.path); } catch (e) {}
                     } catch (err) {
-                        console.warn('[EVENT] Firebase Storage upload failed, falling back to local store:', err && err.message ? err.message : err);
-                        try { await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true }); } catch (e) {}
-                        const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
-                        await fsp.rename(req.file.path, targetPath);
-                        data.imagePath = targetPath;
-                        data.imageUrl = `/uploads/events-announcements/${fileName}`;
-                        req.flash('warning', 'Image saved locally because Firebase Storage could not be used.');
+                        console.error('[EVENT] Supabase upload failed:', err && err.message ? err.message : err);
+                        // Local fallback: move file to public/uploads and save local URL
+                        try {
+                            await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
+                            const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
+                            await fsp.rename(req.file.path, targetPath);
+                            data.imagePath = `/uploads/events-announcements/${fileName}`;
+                            data.imageUrl = `/uploads/events-announcements/${fileName}`;
+                            data.imageStorage = 'local';
+                        } catch (localErr) {
+                            console.error('[EVENT] Local fallback failed:', localErr && localErr.message ? localErr.message : localErr);
+                            try { await fsp.unlink(req.file.path); } catch (e) {}
+                            req.flash('warning', 'Image upload failed; event saved without image.');
+                        }
                     }
                 } else {
-                    await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
-                    const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
-                    await fsp.rename(req.file.path, targetPath);
-                    data.imagePath = targetPath;
-                    data.imageUrl = `/uploads/events-announcements/${fileName}`;
-                    if (!bucket) req.flash('warning', 'No Firebase Storage bucket configured — image saved locally.');
+                    // Supabase not configured — keep a local copy and store its public path
+                    try {
+                        await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
+                        const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
+                        await fsp.rename(req.file.path, targetPath);
+                        data.imagePath = `/uploads/events-announcements/${fileName}`;
+                        data.imageUrl = `/uploads/events-announcements/${fileName}`;
+                        data.imageStorage = 'local';
+                    } catch (localErr) {
+                        console.error('[EVENT] Local save failed:', localErr && localErr.message ? localErr.message : localErr);
+                        try { await fsp.unlink(req.file.path); } catch (e) {}
+                        req.flash('warning', 'Supabase not configured; event saved without image.');
+                    }
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
@@ -197,40 +193,58 @@ exports.updateEvent = async (req, res) => {
                 const fileName = `${base}-${Date.now()}${extension}`;
                 const destPath = `events-announcements/${fileName}`;
 
-                if (bucket && await ensureBucketAvailable()) {
+                // Try Supabase first, fallback to local
+                if (supabase && supabaseBucket) {
                     try {
-                        await bucket.upload(req.file.path, { destination: destPath, metadata: { contentType: req.file.mimetype } });
-                        try { await bucket.file(destPath).makePublic(); } catch (e) {}
+                        const buffer = await fsp.readFile(req.file.path);
+                        const { data: uploadData, error: uploadError } = await supabase.storage.from(supabaseBucket).upload(destPath, buffer, { contentType: req.file.mimetype, upsert: false });
+                        if (uploadError) throw uploadError;
+                        const { data: publicData } = supabase.storage.from(supabaseBucket).getPublicUrl(destPath);
                         updateData.imagePath = destPath;
-                        updateData.imageUrl = `https://storage.googleapis.com/${bucket.name}/${destPath}`;
+                        updateData.imageUrl = (publicData && publicData.publicUrl) ? publicData.publicUrl : null;
+                        updateData.imageStorage = 'supabase';
                         try { await fsp.unlink(req.file.path); } catch (e) {}
-
-                        // delete previous storage file if present
-                        if (existing.imagePath && typeof existing.imagePath === 'string' && existing.imagePath.includes('events-announcements/')) {
-                            try { await bucket.file(existing.imagePath).delete().catch(() => {}); } catch (e) {}
+                        // remove previous supabase file if present
+                        if (existing.imageStorage === 'supabase' && existing.imagePath) {
+                            try { await supabase.storage.from(supabaseBucket).remove([existing.imagePath]).catch(() => {}); } catch (e) {}
                         }
                     } catch (err) {
-                        console.warn('[EVENT] Firebase Storage upload failed (update), falling back to local store:', err && err.message ? err.message : err);
-                        try { await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true }); } catch (e) {}
-                        const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
-                        await fsp.rename(req.file.path, targetPath);
-                        updateData.imagePath = targetPath;
-                        updateData.imageUrl = `/uploads/events-announcements/${fileName}`;
-                        req.flash('warning', 'Image saved locally because Firebase Storage upload failed.');
-                        if (existing.imagePath && typeof existing.imagePath === 'string' && fs.existsSync(existing.imagePath)) {
-                            try { await fsp.unlink(existing.imagePath); } catch (e) {}
+                        console.error('[EVENT] Supabase upload failed (update):', err && err.message ? err.message : err);
+                        // Local fallback: move file into public uploads and set local URL
+                        try {
+                            await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
+                            const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
+                            await fsp.rename(req.file.path, targetPath);
+                            updateData.imagePath = `/uploads/events-announcements/${fileName}`;
+                            updateData.imageUrl = `/uploads/events-announcements/${fileName}`;
+                            updateData.imageStorage = 'local';
+                            // delete previous local image if present
+                            if (existing.imageStorage === 'local' && existing.imagePath && typeof existing.imagePath === 'string' && fs.existsSync(path.join(process.cwd(), existing.imagePath.replace(/^\//, '')))) {
+                                try { await fsp.unlink(path.join(process.cwd(), existing.imagePath.replace(/^\//, ''))).catch(() => {}); } catch (e) {}
+                            }
+                        } catch (localErr) {
+                            console.error('[EVENT] Local fallback failed (update):', localErr && localErr.message ? localErr.message : localErr);
+                            try { await fsp.unlink(req.file.path); } catch (e) {}
+                            req.flash('warning', 'Image upload failed; event updated without changing the image.');
                         }
                     }
                 } else {
-                    await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
-                    const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
-                    await fsp.rename(req.file.path, targetPath);
-                    updateData.imagePath = targetPath;
-                    updateData.imageUrl = `/uploads/events-announcements/${fileName}`;
-                    if (existing.imagePath && typeof existing.imagePath === 'string' && fs.existsSync(existing.imagePath)) {
-                        try { await fsp.unlink(existing.imagePath); } catch (e) {}
+                    // Supabase not configured — save locally
+                    try {
+                        await fsp.mkdir(EVENT_UPLOAD_DIR, { recursive: true });
+                        const targetPath = path.join(EVENT_UPLOAD_DIR, fileName);
+                        await fsp.rename(req.file.path, targetPath);
+                        updateData.imagePath = `/uploads/events-announcements/${fileName}`;
+                        updateData.imageUrl = `/uploads/events-announcements/${fileName}`;
+                        updateData.imageStorage = 'local';
+                        if (existing.imageStorage === 'local' && existing.imagePath && typeof existing.imagePath === 'string' && fs.existsSync(path.join(process.cwd(), existing.imagePath.replace(/^\//, '')))) {
+                            try { await fsp.unlink(path.join(process.cwd(), existing.imagePath.replace(/^\//, ''))).catch(() => {}); } catch (e) {}
+                        }
+                    } catch (localErr) {
+                        console.error('[EVENT] Local save failed (update):', localErr && localErr.message ? localErr.message : localErr);
+                        try { await fsp.unlink(req.file.path); } catch (e) {}
+                        req.flash('warning', 'Supabase not configured; image not saved.');
                     }
-                    if (!bucket) req.flash('warning', 'No Firebase Storage bucket configured — image saved locally.');
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
@@ -263,10 +277,10 @@ exports.deleteEvent = async (req, res) => {
 
         if (record.imagePath) {
             try {
-                if (bucket && typeof record.imagePath === 'string' && record.imagePath.includes('events-announcements/')) {
-                    await bucket.file(record.imagePath).delete().catch(() => {});
-                } else if (typeof record.imagePath === 'string' && fs.existsSync(record.imagePath)) {
-                    await fsp.unlink(record.imagePath).catch(() => {});
+                if (record.imageStorage === 'supabase' && supabase && supabaseBucket) {
+                    try { await supabase.storage.from(supabaseBucket).remove([record.imagePath]).catch(() => {}); } catch (e) {}
+                } else if (record.imageStorage === 'local' && typeof record.imagePath === 'string' && fs.existsSync(record.imagePath)) {
+                    try { await fsp.unlink(record.imagePath).catch(() => {}); } catch (e) {}
                 }
             } catch (e) { console.error('Failed to remove image after delete:', e); }
         }

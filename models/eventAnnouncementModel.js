@@ -123,6 +123,7 @@ exports.create = async (data = {}) => {
         status: normalizeStatus(data.status),
         imageUrl: data.imageUrl || null,
         imagePath: data.imagePath || null,
+        imageStorage: data.imageStorage || null,
         createdAt: admin.firestore.Timestamp.now(),
         updatedAt: admin.firestore.Timestamp.now()
     };
@@ -164,6 +165,7 @@ exports.update = async (id, data = {}) => {
         status: normalizeStatus(data.status),
         imageUrl: data.imageUrl || null,
         imagePath: data.imagePath || null,
+        imageStorage: data.imageStorage || null,
         updatedAt: new Date()
     };
 

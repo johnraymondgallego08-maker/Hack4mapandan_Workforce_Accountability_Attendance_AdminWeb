@@ -18,7 +18,8 @@ try {
   admin.initializeApp({
     // Use the loaded service account cert directly
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: `https://${projectId}.firebaseio.com`
+    databaseURL: `https://${projectId}.firebaseio.com`,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || undefined
   });
 } catch (error) {
   console.error('Firebase Admin SDK initialization error:', error.message);
