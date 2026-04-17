@@ -9,6 +9,7 @@
 
     <!-- Fonts -->
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/css/table-alignment.css">
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -531,6 +532,14 @@
                     window.db = firebase.firestore();
                 }
             </script>
+
+            <!-- Socket.io for Real-Time Updates -->
+            <script src="/socket.io/socket.io.min.js"></script>
+            <script src="/js/realtime.js"></script>
+            <script src="/js/socket-diagnostics.js"></script>
+            
+            <!-- Table Sorting & Pagination -->
+            <script src="/js/table-sorting-pagination.js"></script>
 
 </body>
 

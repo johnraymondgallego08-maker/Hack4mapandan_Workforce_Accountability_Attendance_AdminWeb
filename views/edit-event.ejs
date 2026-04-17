@@ -7,7 +7,7 @@
     </div>
 
     <div class="card" style="padding: 2rem;">
-        <form action="/manage-events/edit/<%= record.id %>" method="POST" enctype="multipart/form-data" onsubmit="confirmUpdate(this, 'Update Post', 'Save these changes to the event or announcement?')">
+        <form id="editEventForm" action="/manage-events/edit/<%= record.id %>" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div>
@@ -74,3 +74,6 @@
         lucide.createIcons();
     });
 </script>
+
+<!-- Real-Time Updates for Edit Event Page -->
+<script src="/js/edit-event-realtime.js"></script>

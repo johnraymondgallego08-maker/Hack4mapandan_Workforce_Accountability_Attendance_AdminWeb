@@ -1,0 +1,310 @@
+/**
+ * Universal Table Styling and Alignment
+ * Applied to all tables for consistent appearance and behavior
+ */
+
+/* Base table styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table thead {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+table thead th {
+    padding: 0.75rem 0.85rem;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-heading);
+    border-bottom: 1px solid var(--border-glass);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+table tbody tr {
+    border-bottom: 1px solid var(--border-glass);
+    transition: background-color 0.15s ease;
+}
+
+table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+table tbody td {
+    padding: 0.75rem 0.85rem;
+    vertical-align: middle;
+    font-size: 0.9rem;
+    color: var(--text-body);
+}
+
+/* Alignment utilities */
+table th[style*="text-align: center"],
+table td[style*="text-align: center"] {
+    text-align: center;
+}
+
+table th[style*="text-align: right"],
+table td[style*="text-align: right"],
+table.text-right,
+table th.text-right,
+table td.text-right {
+    text-align: right;
+}
+
+table th[style*="text-align: left"],
+table td[style*="text-align: left"] {
+    text-align: left;
+}
+
+/* Monospace text for dates, times, IDs */
+.mono-text,
+table .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+/* Status badges alignment */
+table .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Action column alignment */
+table td[style*="text-align: right"] .table-action-group,
+table td .table-action-group {
+    display: flex;
+    gap: 0.35rem;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+table .btn-action {
+    padding: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+    table thead th,
+    table tbody td {
+        padding: 0.5rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    table thead th {
+        font-size: 0.75rem;
+    }
+
+    .mono-text,
+    table .font-mono {
+        font-size: 0.75rem;
+    }
+}
+
+/* History table specific */
+#historyTable thead th,
+#historyTable tbody td {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+#historyTable th:last-child,
+#historyTable td:last-child {
+    padding-right: 1.2rem;
+}
+
+/* Pending and recent activity tables */
+#pendingLeavesTable thead,
+#recentActivityTable thead {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Table responsive wrapper */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0;
+}
+
+.table-responsive table {
+    min-width: 100%;
+}
+
+/* Sortable header indication */
+table thead th[data-sortable="true"],
+table thead th[onclick] {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+    background-color: rgba(0, 0, 0, 0.02) !important;
+}
+
+table thead th[data-sortable="true"]:hover,
+table thead th[onclick]:hover {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+table thead th[data-sortable="true"]:active,
+table thead th[onclick]:active {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+table thead th .sort-icon {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    display: inline-block;
+}
+
+/* Person pill in tables */
+.person-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.person-pill__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-gradient);
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.person-pill__avatar--small {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+}
+
+.person-pill__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.person-pill__content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.person-pill__content strong {
+    font-weight: 700;
+    color: var(--text-heading);
+}
+
+.person-pill__content span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Pagination controls alignment */
+#recentActivityTable-pagination,
+#attendanceTable-pagination,
+#overtimeTable-pagination,
+#payrollTable-pagination,
+#usersTable-pagination,
+#historyTable-pagination,
+#pendingLeavesTable-pagination,
+#employeeAttendanceTable-pagination,
+#deviceTable-pagination,
+#eventsTable-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border-glass);
+    padding-top: 1rem;
+}
+
+/* Disabled button states in pagination */
+button[id*="-prev"]:disabled,
+button[id*="-next"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Center text for small columns */
+.text-center {
+    text-align: center !important;
+}
+
+.hours-col,
+.date-col {
+    white-space: nowrap;
+}
+
+/* Accent colors for different statuses */
+.accent-info {
+    color: var(--accent-info, #0ea5e9);
+}
+
+.accent-success {
+    color: var(--accent-success, #10b981);
+}
+
+.accent-warning {
+    color: var(--accent-warning, #f59e0b);
+}
+
+.accent-danger {
+    color: var(--accent-danger, #ef4444);
+}
+
+/* Status badge colors */
+.status-present {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.status-absent {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #b91c1c;
+}
+
+.status-late {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #b45309;
+}
+
+.status-leave {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #1e40af;
+}
+
+.status-overtime {
+    background-color: rgba(168, 85, 247, 0.15);
+    color: #6b21a8;
+}
+
+.status-default {
+    background-color: rgba(107, 114, 128, 0.15);
+    color: #374151;
+}
+
+/* Ensure columns with actions stay aligned */
+table td:last-child,
+table th:last-child {
+    text-align: right;
+}

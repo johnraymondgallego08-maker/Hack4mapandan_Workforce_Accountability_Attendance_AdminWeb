@@ -5,8 +5,11 @@ if (util.isArray) util.isArray = Array.isArray;
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
+const http = require("http");
+const socketio = require("socket.io");
 // Initialize Firebase Admin SDK
 const { admin, db, projectId } = require('./config/firebaseAdmin');
+const RealtimeService = require('./services/realtimeService');
 const session = require("express-session");
 const expressLayouts = require("express-ejs-layouts");
 const flash = require("connect-flash");
@@ -54,7 +57,7 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://www.gstatic.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "blob:", "https:"],
-            connectSrc: ["'self'", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firestore.googleapis.com", "https://www.googleapis.com", "https://*.googleapis.com"],
+            connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firestore.googleapis.com", "https://www.googleapis.com", "https://*.googleapis.com"],
             fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
             objectSrc: ["'none'"],
             frameAncestors: ["'self'"],
@@ -204,8 +207,26 @@ app.get('/fix-login', securityMiddleware.requireEmergencyAccess, async (req, res
 const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 3000;
 const MAX_PORT_TRIES = 10;
 
+let realtimeService = null;
+
 function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
-    const server = app.listen(port, async () => {
+    // Create HTTP server for Socket.io
+    const server = http.createServer(app);
+    
+    // Initialize Socket.io
+    const io = socketio(server, {
+        cors: {
+            origin: "*",
+            methods: ["GET", "POST"]
+        },
+        transports: ['websocket']
+    });
+
+    // Initialize real-time service
+    realtimeService = new RealtimeService(io);
+    realtimeService.initialize();
+
+    server.listen(port, async () => {
         if (admin.apps.length) {
             console.log(`✅ Firebase Admin SDK initialized for project: ${projectId}`);
             try {
@@ -223,7 +244,8 @@ function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
             }
         }
 
-        console.log(`Server running on http://localhost:${port}`);
+        console.log(`✅ Server running on http://localhost:${port}`);
+        console.log(`✅ Real-time updates enabled (Socket.io listening)`);
     });
 
     server.on('error', (err) => {
@@ -248,6 +270,20 @@ function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
             process.exit(1);
         }
     });
+
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+        console.log('[APP] Shutting down gracefully...');
+        if (realtimeService) {
+            realtimeService.cleanup();
+        }
+        server.close(() => {
+            console.log('[APP] Server closed');
+            process.exit(0);
+        });
+    });
+
+    return server;
 }
 
 startServer(DEFAULT_PORT);

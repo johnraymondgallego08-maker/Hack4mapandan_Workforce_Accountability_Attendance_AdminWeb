@@ -71,15 +71,15 @@
                 <h3>Pending Applications</h3>
             </div>
             <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1180px;">
-                <table>
+                <table id="pendingLeavesTable">
                     <thead>
                         <tr>
-                            <th style="white-space: nowrap;">Employee</th>
-                            <th style="white-space: nowrap;">Type</th>
-                            <th style="white-space: nowrap; text-align: right;">Requested On</th>
-                            <th style="white-space: nowrap; text-align: right;">
+                            <th style="white-space: nowrap;" data-sortable="true">Employee</th>
+                            <th style="white-space: nowrap;" data-sortable="true">Type</th>
+                            <th style="white-space: nowrap; text-align: right;" data-sortable="true">Requested On</th>
+                            <th style="white-space: nowrap; text-align: right;" data-sortable="true">
                                 Start Date</th>
-                            <th style="white-space: nowrap; text-align: right;">
+                            <th style="white-space: nowrap; text-align: right;" data-sortable="true">
                                 End Date</th>
                             <th style="min-width: 200px;">Reason</th>
                             <th style="text-align: right;">Status</th>
@@ -177,14 +177,14 @@
                 <table id="historyTable">
                     <thead>
                         <tr>
-                            <th>Employee</th>
-                            <th>Type</th>
-                            <th style="text-align: right; white-space: nowrap;">Requested On</th>
-                            <th style="text-align: right;">Start Date</th>
-                            <th style="text-align: right;">End Date</th>
+                            <th data-sortable="true">Employee</th>
+                            <th data-sortable="true">Type</th>
+                            <th style="text-align: right; white-space: nowrap;" data-sortable="true">Requested On</th>
+                            <th style="text-align: right;" data-sortable="true">Start Date</th>
+                            <th style="text-align: right;" data-sortable="true">End Date</th>
                             <th>Reason</th>
-                            <th style="text-align: right; white-space: nowrap;">Action Date</th>
-                            <th style="text-align: right;">Status</th>
+                            <th style="text-align: right; white-space: nowrap;" data-sortable="true">Action Date</th>
+                            <th style="text-align: right;" data-sortable="true">Status</th>
                             <th style="text-align: right;">Actions</th>
                         </tr>
                     </thead>

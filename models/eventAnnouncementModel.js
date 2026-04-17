@@ -159,14 +159,14 @@ exports.update = async (id, data = {}) => {
         title: data.title || '',
         summary: data.summary || '',
         content: data.content || '',
-        eventDate: data.eventDate || null,
+        eventDate: toFirestoreTimestamp(data.eventDate) || null,
         eventTime: data.eventTime || '',
         location: data.location || '',
         status: normalizeStatus(data.status),
         imageUrl: data.imageUrl || null,
         imagePath: data.imagePath || null,
         imageStorage: data.imageStorage || null,
-        updatedAt: new Date()
+        updatedAt: admin.firestore.Timestamp.now()
     };
 
     await db.collection(COLLECTION_NAME).doc(id).set(payload, { merge: true });
