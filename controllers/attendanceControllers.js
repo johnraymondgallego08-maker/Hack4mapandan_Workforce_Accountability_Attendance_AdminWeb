@@ -702,7 +702,8 @@ exports.attendanceMonitor = async (req, res) => {
                             employeeName: employeeName,
                             date: record.timeIn || record.timestamp,
                             hours: (hours - 9).toFixed(2),
-                            status: 'Pending',
+                            isOTRequested: true,
+                            otStatus: 'Pending Approval',
                             reason: 'Automatic System Capture (>9h)'
                         });
                         overtimeRequests.push(overtimeEntry);
@@ -717,20 +718,22 @@ exports.attendanceMonitor = async (req, res) => {
             dailyStatus = 'Overtime';
 
             try {
-                const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && formatDate(o.date) === formatDate(record.timeIn));
-                if (!existingOvertime) {
-                    const overtimeEntry = await overtimeModel.add({
-                        employeeId: empId,
-                        employeeName: employeeName,
-                        date: record.timeIn || record.timestamp,
-                        hours: (hours - 9).toFixed(2),
-                        status: 'Pending',
-                        reason: 'Automatic System Capture (no clock-out past 9h)'
+                const recordDateStr = formatDate(record.timeIn || record.timestamp);
+                const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && (o.id === record.id || formatDate(o.date) === recordDateStr));
+                
+                if (!existingOvertime && !record.isOTRequested) {
+                    // Flag the attendance record itself
+                    await db.collection('attendance').doc(record.id).update({
+                        isOTRequested: true, 
+                        otStatus: 'Pending Approval',
+                        otHours: (hours - 9).toFixed(2)
                     });
-                    overtimeRequests.push(overtimeEntry);
+                    
+                    // Sync local cache for this request
+                    overtimeRequests.push({ id: record.id, employeeId: empId, date: record.timeIn || record.timestamp, isOTRequested: true, otStatus: 'Pending Approval' });
                 }
             } catch (e) {
-                console.error("Auto-overtime sync failed:", e);
+                console.error("Auto-overtime detection flag failed (open shift):", e);
             }
         }
 

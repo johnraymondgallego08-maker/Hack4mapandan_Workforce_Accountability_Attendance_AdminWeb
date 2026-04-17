@@ -19,6 +19,11 @@ router.post("/manage-overtime/approve/:id", authMiddleware.isAuthenticated, admi
     const actor = req.session && req.session.user ? { id: req.session.user.uid || req.session.user.id, name: req.session.user.name || req.session.user.email } : {};
     const request = await overtimeModel.approve(req.params.id, actor);
 
+    // Handle AJAX request
+    if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+        return res.json({ success: !!request, status: 'Approved' });
+    }
+
     if (request) {
         req.flash("success", "Overtime request approved successfully.");
     } else {
@@ -31,6 +36,11 @@ router.post("/manage-overtime/approve/:id", authMiddleware.isAuthenticated, admi
 router.post("/manage-overtime/reject/:id", authMiddleware.isAuthenticated, adminMiddleware.isAdmin, async (req, res) => {
     const actor = req.session && req.session.user ? { id: req.session.user.uid || req.session.user.id, name: req.session.user.name || req.session.user.email } : {};
     const request = await overtimeModel.reject(req.params.id, actor);
+
+    // Handle AJAX request
+    if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+        return res.json({ success: !!request, status: 'Rejected' });
+    }
 
     if (request) {
         req.flash("success", "Overtime request rejected.");

@@ -122,11 +122,23 @@ class RealtimeService {
                     const data = doc.data();
 
                     if (change.type === 'added' || change.type === 'modified') {
-                        this.turbo.priorityBroadcast('attendance', 'attendance-updated', {
+                        const broadcastData = {
                             id: doc.id,
                             ...data,
                             timestamp: data.timestamp?.toDate?.() || new Date(),
-                        });
+                        };
+                        
+                        this.turbo.priorityBroadcast('attendance', 'attendance-updated', broadcastData);
+
+                        // If this attendance record has an overtime request, notify overtime room as well
+                        if (data.isOTRequested) {
+                            this.turbo.priorityBroadcast('overtime', 'overtime-updated', {
+                                ...broadcastData,
+                                date: data.date?.toDate?.() || data.timeIn?.toDate?.() || data.timestamp?.toDate?.() || data.date || null,
+                                hours: data.otHours || data.hours || 'N/A'
+                            });
+                        }
+                        
                         console.log(`[REALTIME] 📊 Attendance ${change.type}: ${doc.id}`);
                     }
                 });
@@ -214,7 +226,7 @@ class RealtimeService {
                         this.turbo.priorityBroadcast('overtime', 'overtime-updated', {
                             id: doc.id,
                             ...data,
-                            overtimeDate: data.overtimeDate?.toDate?.() || null,
+                            date: data.date?.toDate?.() || data.date || null,
                             createdAt: data.createdAt?.toDate?.() || new Date(),
                         });
                         console.log(`[REALTIME] ⏰ Overtime ${change.type}: ${doc.id}`);

@@ -3,8 +3,43 @@ const overtimeCollection = db.collection('overtime');
 
 exports.getAll = async () => {
     try {
-        // Fetch all without sorting first to avoid index errors
-        const snapshot = await overtimeCollection.get();
+        const allDocs = [];
+        
+        // 1. Fetch from manual overtime collection
+        try {
+            const otSnapshot = await overtimeCollection.get();
+            allDocs.push(...otSnapshot.docs);
+        } catch (err) {
+            console.error("[OVERTIME MODEL] Failed to fetch manual overtime collection:", err.message);
+        }
+
+        // 2. Fetch from attendance collection where OT is flagged
+        try {
+            // Try multiple variants of the query (Boolean and String) to find every single request
+            const queries = [
+                db.collection('attendance').where('isOTRequested', '==', true).get(),
+                db.collection('attendance').where('isOTRequested', '==', 'true').get()
+            ];
+            
+            const results = await Promise.all(queries);
+            results.forEach(snap => {
+                snap.docs.forEach(doc => {
+                    if (!allDocs.some(d => d.id === doc.id)) allDocs.push(doc);
+                });
+            });
+        } catch (err) {
+            console.warn("[OVERTIME MODEL] Optimized query failed. Performing manual scan of attendance...");
+            // FAIL-SAFE: If indices are missing, manually filter to ensure NO request is missed
+            const fallbackSnapshot = await db.collection('attendance').get();
+            fallbackSnapshot.docs.forEach(doc => {
+                const data = doc.data();
+                const isRequested = data.isOTRequested === true || String(data.isOTRequested).toLowerCase() === 'true';
+                if (isRequested && !allDocs.some(d => d.id === doc.id)) {
+                    allDocs.push(doc);
+                }
+            });
+        }
+
         const requests = [];
 
         const formatDateValue = (v) => {
@@ -14,19 +49,27 @@ exports.getAll = async () => {
             return isNaN(d.getTime()) ? null : d.toLocaleString();
         };
 
-        snapshot.forEach(doc => {
+        allDocs.forEach(doc => {
             const data = doc.data() || {};
+            const id = doc.id;
             // Keep original date object for sorting (overtime occurrence date or fallback to timestamp)
-            const sortDate = data.date || data.timestamp || data.createdAt || data.requestedDate;
+            const sortDate = data.date || data.timeIn || data.timestamp || data.createdAt || data.requestedDate;
 
             // Normalize displayed fields
             let displayDate = null;
-            if (data.date) {
-                if (data.date.toDate && typeof data.date.toDate === 'function') displayDate = data.date.toDate().toLocaleDateString();
-                else displayDate = String(data.date);
+            // Check all possible date fields used in attendance or overtime collections
+            const dateSource = data.date || data.timeIn || data.timestamp;
+            if (dateSource) {
+                try {
+                    const d = dateSource.toDate ? dateSource.toDate() : new Date(dateSource);
+                    displayDate = isNaN(d.getTime()) ? String(dateSource) : d.toLocaleDateString();
+                } catch (e) {
+                    displayDate = String(dateSource);
+                }
             }
 
-            const requestedDate = formatDateValue(data.requestedDate || data.requestedAt || data.createdAt || data.timestamp);
+            // Ensure requestedDate doesn't fall back to null if timestamp exists
+            const requestedDate = formatDateValue(data.requestedDate || data.requestedAt || data.createdAt || data.timestamp || data._ts);
             const actionDate = formatDateValue(data.actionDate || data.approvedAt || data.rejectedAt || null);
 
             // Build a readable history array (if any)
@@ -40,10 +83,13 @@ exports.getAll = async () => {
             }));
 
             requests.push({
-                id: doc.id,
                 ...data,
-                employee: data.employeeName || data.employee || data.employeeId || data.name || 'Unknown',
-                date: displayDate || (data.date || 'N/A'),
+                id: id,
+                employee: data.employeeName || data.name || data.employee || data.employeeId || 'Unknown',
+                // Priority to otStatus for consistency with your database requirement
+                status: data.otStatus || data.status || 'Pending Approval',
+                hours: data.otHours || data.hours || 'N/A',
+                date: displayDate || 'N/A',
                 requestedDate: requestedDate,
                 actionDate: actionDate,
                 history,
@@ -69,7 +115,9 @@ exports.add = async (data) => {
         const now = new Date();
         const payload = {
             ...data,
-            status: data.status || 'Pending',
+            isOTRequested: true,
+            otStatus: data.otStatus || data.status || 'Pending Approval',
+            status: data.otStatus || data.status || 'Pending Approval',
             requestedDate: data.requestedDate || now,
             createdAt: data.createdAt || now,
             // Initial history entry for request
@@ -92,12 +140,19 @@ exports.add = async (data) => {
 
 exports.approve = async (id, performedBy = {}) => {
     try {
-        const docRef = overtimeCollection.doc(id);
-        const doc = await docRef.get();
+        // Try to find the document in 'overtime' first, then 'attendance'
+        let docRef = overtimeCollection.doc(id);
+        let doc = await docRef.get();
+
+        if (!doc.exists) {
+            docRef = db.collection('attendance').doc(id);
+            doc = await docRef.get();
+        }
+
         if (doc.exists) {
             const actionDate = new Date();
             await docRef.update({
-                status: 'Approved',
+                otStatus: 'Approved',
                 actionDate: actionDate,
                 approvedAt: actionDate,
                 history: admin.firestore.FieldValue.arrayUnion({
@@ -127,12 +182,19 @@ exports.approve = async (id, performedBy = {}) => {
 
 exports.reject = async (id, performedBy = {}) => {
     try {
-        const docRef = overtimeCollection.doc(id);
-        const doc = await docRef.get();
+        // Try to find the document in 'overtime' first, then 'attendance'
+        let docRef = overtimeCollection.doc(id);
+        let doc = await docRef.get();
+
+        if (!doc.exists) {
+            docRef = db.collection('attendance').doc(id);
+            doc = await docRef.get();
+        }
+
         if (doc.exists) {
             const actionDate = new Date();
             await docRef.update({
-                status: 'Rejected',
+                otStatus: 'Rejected',
                 actionDate: actionDate,
                 rejectedAt: actionDate,
                 history: admin.firestore.FieldValue.arrayUnion({
