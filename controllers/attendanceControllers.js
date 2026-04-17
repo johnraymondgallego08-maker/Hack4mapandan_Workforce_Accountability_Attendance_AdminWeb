@@ -361,7 +361,7 @@ async function fetchAttendanceDocsForImageRecognition() {
     const PAGE_SIZE = 1000;
     const orderedDocs = [];
     let lastDoc = null;
-
+    const MAX_RECORDS = 2000; // Limit total records to prevent Vercel timeout
     try {
         while (true) {
             let query = db.collection('attendance')
@@ -374,11 +374,11 @@ async function fetchAttendanceDocsForImageRecognition() {
 
             const snapshot = await query.get();
             if (snapshot.empty) break;
-
             orderedDocs.push(...snapshot.docs);
             lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
-            if (snapshot.size < PAGE_SIZE) break;
+            // Stop if we have enough records or reached the end
+            if (snapshot.size < PAGE_SIZE || orderedDocs.length >= MAX_RECORDS) break;
         }
 
         return orderedDocs;
@@ -694,58 +694,14 @@ exports.attendanceMonitor = async (req, res) => {
             if (hours > 9) {
                 dailyStatus = 'Overtime';
                 // Auto-add to overtime collection if not already there
-                try {
-                    const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && formatDate(o.date) === formatDate(record.timeIn));
-                    if (!existingOvertime) {
-                        // WARNING: Performing 'await' inside a map/loop on a GET request
-                        // will cause timeouts (Function Invocation Failed) as the collection grows.
-                        const otUpdate = {
-                            isOTRequested: true,
-                            otStatus: 'Pending Approval',
-                            otHours: (hours - 9).toFixed(2),
-                            employeeName: employeeName
-                        };
-                        // Move this logic to the 'Clock Out' function instead of the 'Monitor' page.
-
-                        const overtimeEntry = await overtimeModel.add({
-                            employeeId: empId,
-                            employeeName: employeeName,
-                            date: record.timeIn || record.timestamp,
-                            hours: (hours - 9).toFixed(2),
-                            isOTRequested: true,
-                            otStatus: 'Pending Approval',
-                            reason: 'Automatic System Capture (>9h)'
-                        });
-                        overtimeRequests.push(overtimeEntry);
-                    }
-                } catch (e) {
-                    console.error("Auto-overtime sync failed:", e);
-                }
+                // NOTE: Logic to update database or add overtime entries moved to the Clock-Out event
+                // to prevent GET request timeouts on Vercel.
             }
         } else if (start && openShiftOvertime) {
             const hours = calculateWorkedHours(record, now) || 0;
             hoursWorked = hours.toFixed(2) + ' hrs';
             dailyStatus = 'Overtime';
 
-            try {
-                const recordDateStr = formatDate(record.timeIn || record.timestamp || record.date);
-                const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && (o.id === record.id || formatDate(o.date) === recordDateStr));
-                
-                // Fix: Set otStatus even if isOTRequested is true but otStatus is missing
-                if (!existingOvertime && (!record.isOTRequested || !record.otStatus)) {
-                    await db.collection('attendance').doc(record.id).update({
-                        isOTRequested: true, 
-                        otStatus: 'Pending Approval',
-                        otHours: (hours - 9).toFixed(2),
-                        employeeName: employeeName
-                    });
-                    
-                    // Sync local cache for this request
-                    overtimeRequests.push({ id: record.id, employeeId: empId, date: record.timeIn || record.timestamp, isOTRequested: true, otStatus: 'Pending Approval' });
-                }
-            } catch (e) {
-                console.error("Auto-overtime detection flag failed (open shift):", e);
-            }
         }
 
         // 3. Check Leave
