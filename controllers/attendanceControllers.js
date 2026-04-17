@@ -697,14 +697,15 @@ exports.attendanceMonitor = async (req, res) => {
                 try {
                     const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && formatDate(o.date) === formatDate(record.timeIn));
                     if (!existingOvertime) {
-                        // Ensure otStatus is set to 'Pending Approval' regardless of existing flags
+                        // WARNING: Performing 'await' inside a map/loop on a GET request
+                        // will cause timeouts (Function Invocation Failed) as the collection grows.
                         const otUpdate = {
                             isOTRequested: true,
                             otStatus: 'Pending Approval',
                             otHours: (hours - 9).toFixed(2),
                             employeeName: employeeName
                         };
-                        await db.collection('attendance').doc(record.id).update(otUpdate);
+                        // Move this logic to the 'Clock Out' function instead of the 'Monitor' page.
 
                         const overtimeEntry = await overtimeModel.add({
                             employeeId: empId,

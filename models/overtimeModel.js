@@ -32,7 +32,7 @@ exports.getAll = async () => {
         } catch (err) {
             console.warn("[OVERTIME MODEL] Optimized query failed. Performing manual scan of attendance...");
             // FAIL-SAFE: If indices are missing, manually filter to ensure NO request is missed
-            const fallbackSnapshot = await db.collection('attendance').get();
+            const fallbackSnapshot = await db.collection('attendance').limit(100).get(); // Add a limit
             fallbackSnapshot.docs.forEach(doc => {
                 const data = doc.data();
                 const isRequested = data.isOTRequested === true || String(data.isOTRequested).toLowerCase() === 'true';
