@@ -3,6 +3,7 @@ const overtimeCollection = db.collection('overtime');
 
 exports.getAll = async () => {
     try {
+        const seenRequests = new Set(); // For de-duplication by Employee + Date
         const allDocs = [];
         
         // 1. Fetch from manual overtime collection
@@ -18,7 +19,8 @@ exports.getAll = async () => {
             // Try multiple variants of the query (Boolean and String) to find every single request
             const queries = [
                 db.collection('attendance').where('isOTRequested', '==', true).get(),
-                db.collection('attendance').where('isOTRequested', '==', 'true').get()
+                db.collection('attendance').where('isOTRequested', '==', 'true').get(),
+                db.collection('attendance').where('otStatus', '==', 'Pending Approval').get()
             ];
             
             const results = await Promise.all(queries);
@@ -34,7 +36,8 @@ exports.getAll = async () => {
             fallbackSnapshot.docs.forEach(doc => {
                 const data = doc.data();
                 const isRequested = data.isOTRequested === true || String(data.isOTRequested).toLowerCase() === 'true';
-                if (isRequested && !allDocs.some(d => d.id === doc.id)) {
+                const hasOtStatus = data.otStatus === 'Pending Approval';
+                if ((isRequested || hasOtStatus) && !allDocs.some(d => d.id === doc.id)) {
                     allDocs.push(doc);
                 }
             });
@@ -86,8 +89,14 @@ exports.getAll = async () => {
                 ...data,
                 id: id,
                 employee: data.employeeName || data.name || data.employee || data.employeeId || 'Unknown',
-                // Priority to otStatus for consistency with your database requirement
-                status: data.otStatus || data.status || 'Pending Approval',
+                employeeId: data.employeeId || id,
+                // Attendance punch status (Timed In / Timed Out)
+                attendanceStatus: data.status || 'N/A',
+                // Map status for UI: Ignore "Auto-Logout" etc., show "Pending Approval" by default
+                status: (data.otStatus === 'Approved' || data.otStatus === 'Rejected') ? data.otStatus : 'Pending Approval',
+                otStatus: (data.otStatus === 'Approved' || data.otStatus === 'Rejected') 
+                    ? data.otStatus 
+                    : 'Pending Approval',
                 hours: data.otHours || data.hours || 'N/A',
                 date: displayDate || 'N/A',
                 requestedDate: requestedDate,
@@ -96,14 +105,25 @@ exports.getAll = async () => {
                 _sortDate: sortDate
             });
         });
+        
+        // Smart De-duplication: If the same employee has an OT request on the same date, keep the one with a valid status
+        const finalRequests = [];
+        const uniqueMap = new Map();
+        
+        requests.forEach(req => {
+            // Create a unique key based on Employee and the specific Date of the request
+            const key = `${String(req.employeeId).trim()}_${req.date}`;
+            if (!uniqueMap.has(key) || (req.otStatus !== 'Pending Approval' && uniqueMap.get(key).otStatus === 'Pending Approval')) {
+                uniqueMap.set(key, req);
+            }
+        });
 
-        // Sort in memory by the chosen sortDate
-        requests.sort((a, b) => {
+        const sortedRequests = Array.from(uniqueMap.values()).sort((a, b) => {
             const dateA = a._sortDate && a._sortDate.toDate ? a._sortDate.toDate() : new Date(a._sortDate || 0);
             const dateB = b._sortDate && b._sortDate.toDate ? b._sortDate.toDate() : new Date(b._sortDate || 0);
             return dateB - dateA;
         });
-        return requests;
+        return sortedRequests;
     } catch (error) {
         console.error("Error fetching overtime requests:", error);
         return []; // Return empty array on error so dashboard doesn't crash
@@ -116,8 +136,7 @@ exports.add = async (data) => {
         const payload = {
             ...data,
             isOTRequested: true,
-            otStatus: data.otStatus || data.status || 'Pending Approval',
-            status: data.otStatus || data.status || 'Pending Approval',
+            otStatus: data.otStatus || 'Pending Approval',
             requestedDate: data.requestedDate || now,
             createdAt: data.createdAt || now,
             // Initial history entry for request

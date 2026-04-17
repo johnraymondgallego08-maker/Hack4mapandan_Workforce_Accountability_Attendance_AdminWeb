@@ -697,6 +697,15 @@ exports.attendanceMonitor = async (req, res) => {
                 try {
                     const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && formatDate(o.date) === formatDate(record.timeIn));
                     if (!existingOvertime) {
+                        // Ensure otStatus is set to 'Pending Approval' regardless of existing flags
+                        const otUpdate = {
+                            isOTRequested: true,
+                            otStatus: 'Pending Approval',
+                            otHours: (hours - 9).toFixed(2),
+                            employeeName: employeeName
+                        };
+                        await db.collection('attendance').doc(record.id).update(otUpdate);
+
                         const overtimeEntry = await overtimeModel.add({
                             employeeId: empId,
                             employeeName: employeeName,
@@ -718,15 +727,16 @@ exports.attendanceMonitor = async (req, res) => {
             dailyStatus = 'Overtime';
 
             try {
-                const recordDateStr = formatDate(record.timeIn || record.timestamp);
+                const recordDateStr = formatDate(record.timeIn || record.timestamp || record.date);
                 const existingOvertime = overtimeRequests.find(o => o.employeeId === empId && (o.id === record.id || formatDate(o.date) === recordDateStr));
                 
-                if (!existingOvertime && !record.isOTRequested) {
-                    // Flag the attendance record itself
+                // Fix: Set otStatus even if isOTRequested is true but otStatus is missing
+                if (!existingOvertime && (!record.isOTRequested || !record.otStatus)) {
                     await db.collection('attendance').doc(record.id).update({
                         isOTRequested: true, 
                         otStatus: 'Pending Approval',
-                        otHours: (hours - 9).toFixed(2)
+                        otHours: (hours - 9).toFixed(2),
+                        employeeName: employeeName
                     });
                     
                     // Sync local cache for this request

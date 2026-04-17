@@ -12,6 +12,15 @@ class RealtimeClient {
         this.listeners = new Map();
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
+
+        // Auto-detect page name from URL for better logging
+        const path = window.location.pathname;
+        const segment = path.split('/').filter(Boolean).pop();
+        this.pageName = path === '/' ? 'Dashboard' : 
+                       (segment ? segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Admin');
+        
+        console.log(`[REALTIME] Auto-detected page: ${this.pageName}`);
+
         this.init();
     }
 
@@ -24,6 +33,7 @@ class RealtimeClient {
         console.log('[REALTIME] 🔌 Initializing Socket.io connection...');
 
         this.socket = io({
+            query: { page: this.pageName },
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
@@ -39,8 +49,7 @@ class RealtimeClient {
         this.socket.on('connect', () => {
             this.isConnected = true;
             this.reconnectAttempts = 0;
-            console.log('[REALTIME] ✅ Connected to server');
-            console.log(`[REALTIME] Socket ID: ${this.socket.id}`);
+            console.log(`[REALTIME] ✅ Page Connected: ${this.pageName} (${this.socket.id})`);
             this.processQueue();
             this.onConnect?.();
         });
@@ -110,10 +119,10 @@ class RealtimeClient {
     joinRoom(room) {
         console.log(`[REALTIME] 🚪 Joining room: ${room}`);
         if (this.isConnected) {
-            this.socket.emit(`join-${room}`);
+            this.socket.emit(`join-${room}`, { page: this.pageName });
         } else {
             console.log(`[REALTIME] ⏳ Queuing join-${room} (waiting for connection)`);
-            this.messageQueue.push(() => this.socket.emit(`join-${room}`));
+            this.messageQueue.push(() => this.socket.emit(`join-${room}`, { page: this.pageName }));
         }
     }
 

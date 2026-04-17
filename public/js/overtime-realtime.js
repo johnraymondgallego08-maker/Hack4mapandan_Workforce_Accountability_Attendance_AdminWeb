@@ -76,21 +76,24 @@ document.addEventListener('DOMContentLoaded', () => {
             let rowFound = false;
 
             rows.forEach(row => {
+                // Check if the row has the ID in its dataset or in any form action
+                const rowId = row.dataset.id;
                 // Match row by checking action URLs in forms (they contain the ID)
                 const forms = row.querySelectorAll('form');
-                forms.forEach(f => { 
-                    if (f.action.includes(data.id)) {
-                        rowFound = true;
-                        realtime.updateExistingRow(row, data);
-                    }
-                });
+                const isMatch = (rowId === data.id) || Array.from(forms).some(f => f.action.includes(data.id));
+                
+                if (isMatch) {
+                    rowFound = true;
+                    realtime.updateExistingRow(row, data);
+                }
             });
 
             // If row doesn't exist, create it (New Request)
             if (!rowFound) {
                 const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
                 const newRow = document.createElement('tr');
-                const status = data.otStatus || data.status || 'Pending Approval';
+                newRow.dataset.id = data.id; // Store ID for future real-time matches
+                const status = data.otStatus || 'Pending Approval';
                 const statusClass = status === 'Approved' ? 'bg-success' : (status === 'Rejected' ? 'bg-danger' : 'bg-warning');
                 
                 newRow.innerHTML = `
@@ -118,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        showNotification(`Overtime request: ${data.otStatus || data.status || 'Pending'}`, 'info');
+        showNotification(`Overtime request: ${data.otStatus || 'Pending Approval'}`, 'info');
     });
 
     // Helper to update existing row data
@@ -128,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Update the status cell badge
                     const statusBadge = row.querySelector('.status-badge');
-                    const newStatus = data.otStatus || data.status || (data.isOTRequested ? 'Pending Approval' : 'Pending');
+                    const newStatus = data.otStatus || 'Pending Approval';
                     if (statusBadge) {
                         statusBadge.textContent = newStatus;
                         statusBadge.className = `status-badge ${newStatus === 'Approved' ? 'bg-success' : (newStatus === 'Rejected' ? 'bg-danger' : 'bg-warning')}`;

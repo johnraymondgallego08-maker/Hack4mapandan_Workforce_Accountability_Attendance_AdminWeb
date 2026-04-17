@@ -20,6 +20,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Intercept Process Payroll to prevent page navigation
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
+        if (!form.action.includes('/manage-payroll/process/')) return;
+
+        e.preventDefault();
+        
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Process Payroll?',
+                text: 'Confirm processing for this employee.',
+                icon: 'question',
+                showCancelButton: true
+            });
+            if (!result.isConfirmed) return;
+        }
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (response.ok) {
+                showNotification('Payroll processed successfully!', 'success');
+            } else {
+                showNotification('Failed to process payroll', 'error');
+            }
+        } catch (error) {
+            showNotification('Network error occurred', 'error');
+        }
+    });
+
     realtime.on('payroll-updated', (data) => {
         console.log('[PAYROLL] Updated:', data);
         

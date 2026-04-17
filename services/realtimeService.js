@@ -20,32 +20,38 @@ class RealtimeService {
         console.log('[REALTIME] Initializing Socket.io listeners...');
 
         this.io.on('connection', (socket) => {
-            console.log(`[SOCKET] ✅ Client connected: ${socket.id}`);
+            const pageName = socket.handshake.query.page || 'Unknown Session';
+            console.log(`[SOCKET] 🟢 NEW CONNECTION | Page: ${pageName} | ID: ${socket.id}`);
 
             // Join a room for real-time updates
-            socket.on('join-events', () => {
+            socket.on('join-events', (data) => {
+                const page = data?.page || 'Unknown Page';
                 socket.join('events');
-                console.log(`[SOCKET] Client joined 'events' room: ${socket.id}`);
+                console.log(`[SOCKET] ${page} joined 'events' room: ${socket.id}`);
             });
 
-            socket.on('join-attendance', () => {
+            socket.on('join-attendance', (data) => {
+                const page = data?.page || 'Unknown Page';
                 socket.join('attendance');
-                console.log(`[SOCKET] Client joined 'attendance' room: ${socket.id}`);
+                console.log(`[SOCKET] ${page} joined 'attendance' room: ${socket.id}`);
             });
 
-            socket.on('join-leave', () => {
+            socket.on('join-leave', (data) => {
+                const page = data?.page || 'Unknown Page';
                 socket.join('leave');
-                console.log(`[SOCKET] Client joined 'leave' room: ${socket.id}`);
+                console.log(`[SOCKET] ${page} joined 'leave' room: ${socket.id}`);
             });
 
-            socket.on('join-payroll', () => {
+            socket.on('join-payroll', (data) => {
+                const page = data?.page || 'Unknown Page';
                 socket.join('payroll');
-                console.log(`[SOCKET] Client joined 'payroll' room: ${socket.id}`);
+                console.log(`[SOCKET] ${page} joined 'payroll' room: ${socket.id}`);
             });
 
-            socket.on('join-overtime', () => {
+            socket.on('join-overtime', (data) => {
+                const page = data?.page || 'Unknown Page';
                 socket.join('overtime');
-                console.log(`[SOCKET] Client joined 'overtime' room: ${socket.id}`);
+                console.log(`[SOCKET] ${page} joined 'overtime' room: ${socket.id}`);
             });
 
             socket.on('disconnect', () => {
@@ -132,10 +138,15 @@ class RealtimeService {
 
                         // If this attendance record has an overtime request, notify overtime room as well
                         if (data.isOTRequested) {
+                            const rawDate = data.date?.toDate?.() || data.timeIn?.toDate?.() || data.timestamp?.toDate?.() || data.date || new Date();
+                            const formattedDate = new Date(rawDate).toLocaleDateString('en-US');
+                            
                             this.turbo.priorityBroadcast('overtime', 'overtime-updated', {
                                 ...broadcastData,
-                                date: data.date?.toDate?.() || data.timeIn?.toDate?.() || data.timestamp?.toDate?.() || data.date || null,
-                                hours: data.otHours || data.hours || 'N/A'
+                                employeeName: data.employeeName || data.name || 'Employee',
+                                date: formattedDate,
+                                hours: data.otHours || data.hours || 'N/A',
+                                otStatus: data.otStatus || 'Pending Approval'
                             });
                         }
                         
