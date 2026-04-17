@@ -122,7 +122,7 @@ class RealtimeService {
                     const data = doc.data();
 
                     if (change.type === 'added' || change.type === 'modified') {
-                        this.turbo.fastBroadcast('attendance', 'attendance-updated', {
+                        this.turbo.priorityBroadcast('attendance', 'attendance-updated', {
                             id: doc.id,
                             ...data,
                             timestamp: data.timestamp?.toDate?.() || new Date(),
@@ -151,7 +151,7 @@ class RealtimeService {
                     const data = doc.data();
 
                     if (change.type === 'added' || change.type === 'modified') {
-                        this.turbo.fastBroadcast('leave', 'leave-updated', {
+                        this.turbo.priorityBroadcast('leave', 'leave-updated', {
                             id: doc.id,
                             ...data,
                             leaveStartDate: data.leaveStartDate?.toDate?.() || null,
@@ -182,7 +182,7 @@ class RealtimeService {
                     const data = doc.data();
 
                     if (change.type === 'added' || change.type === 'modified') {
-                        this.turbo.fastBroadcast('payroll', 'payroll-updated', {
+                        this.turbo.priorityBroadcast('payroll', 'payroll-updated', {
                             id: doc.id,
                             ...data,
                             createdAt: data.createdAt?.toDate?.() || new Date(),
@@ -211,7 +211,7 @@ class RealtimeService {
                     const data = doc.data();
 
                     if (change.type === 'added' || change.type === 'modified') {
-                        this.turbo.fastBroadcast('overtime', 'overtime-updated', {
+                        this.turbo.priorityBroadcast('overtime', 'overtime-updated', {
                             id: doc.id,
                             ...data,
                             overtimeDate: data.overtimeDate?.toDate?.() || null,

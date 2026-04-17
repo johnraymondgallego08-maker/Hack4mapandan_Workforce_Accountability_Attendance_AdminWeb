@@ -109,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Fix: Retrieve the CSRF token from the existing form to ensure 
+        // the delete button works on rows added via real-time.
+        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td style="padding:0.5rem; vertical-align:middle;"><strong>${data.title || 'Untitled'}</strong><br><small style="color:var(--text-muted);">${(data.summary || '').substring(0, 77)}</small></td>
@@ -119,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center;">
                     <a href="/manage-events/edit/${data.id}" class="btn-action" title="Edit"><i data-lucide="edit"></i></a>
                     <form action="/manage-events/delete/${data.id}" method="POST" style="display:inline-block; margin:0;">
-                        <input type="hidden" name="_csrf" value="">
+                        <input type="hidden" name="_csrf" value="${csrfToken}">
                         <button type="submit" class="btn-action btn-delete" title="Delete"><i data-lucide="trash-2"></i></button>
                     </form>
                 </div>
