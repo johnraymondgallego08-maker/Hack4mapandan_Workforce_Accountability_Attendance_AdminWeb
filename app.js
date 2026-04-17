@@ -287,6 +287,6 @@ function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
 }
 
     startServer(DEFAULT_PORT);
-}
+
 
 module.exports = app;
