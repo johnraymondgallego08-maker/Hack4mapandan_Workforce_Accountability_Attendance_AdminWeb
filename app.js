@@ -5,11 +5,8 @@ if (util.isArray) util.isArray = Array.isArray;
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
-const http = require("http");
-const socketio = require("socket.io");
 // Initialize Firebase Admin SDK
 const { admin, db, projectId } = require('./config/firebaseAdmin');
-const RealtimeService = require('./services/realtimeService');
 const session = require("express-session");
 const expressLayouts = require("express-ejs-layouts");
 const flash = require("connect-flash");
@@ -213,18 +210,20 @@ function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
     // Create HTTP server for Socket.io
     const server = http.createServer(app);
     
-    // Initialize Socket.io
-    const io = socketio(server, {
-        cors: {
-            origin: "*",
-            methods: ["GET", "POST"]
-        },
-        transports: ['websocket']
-    });
+    // On Vercel, Socket.io and persistent listeners won't work as expected.
+    // We only initialize them if NOT on Vercel/Production.
+    if (!process.env.VERCEL) {
+        const io = socketio(server, {
+            cors: {
+                origin: "*",
+                methods: ["GET", "POST"]
+            },
+            transports: ['websocket']
+        });
 
-    // Initialize real-time service
-    realtimeService = new RealtimeService(io);
-    realtimeService.initialize();
+        realtimeService = new RealtimeService(io);
+        realtimeService.initialize();
+    }
 
     server.listen(port, async () => {
         if (admin.apps.length) {
@@ -286,7 +285,10 @@ function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
     return server;
 }
 
+// Only start the custom server logic if NOT running on Vercel.
+// Vercel will import the app and handle the invocation.
+if (!process.env.VERCEL) {
     startServer(DEFAULT_PORT);
-
+}
 
 module.exports = app;

@@ -5,18 +5,22 @@ const path = require('path');
 let projectId;
 
 try {
-  // This will automatically use the GOOGLE_APPLICATION_CREDENTIALS environment
-  // variable set in your .env file to find the service account key.
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('GOOGLE_APPLICATION_CREDENTIALS is not set');
+  let serviceAccount;
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Support for Vercel/Production: Loading from environment variable string
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    // Support for Local: Loading from file path
+    const serviceAccountPath = path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    serviceAccount = require(serviceAccountPath);
+  } else {
+    throw new Error('Neither FIREBASE_SERVICE_ACCOUNT nor GOOGLE_APPLICATION_CREDENTIALS is set');
   }
 
-  const serviceAccountPath = path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
-  const serviceAccount = require(serviceAccountPath);
   projectId = serviceAccount.project_id;
 
   admin.initializeApp({
-    // Use the loaded service account cert directly
     credential: admin.credential.cert(serviceAccount),
     databaseURL: `https://${projectId}.firebaseio.com`,
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET || undefined
