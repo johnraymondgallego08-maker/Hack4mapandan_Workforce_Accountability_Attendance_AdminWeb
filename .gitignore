@@ -1,4 +1,6 @@
 node_modules
 lib/firebase_options.dart
+.env
+.env.*
 # Firebase service account key
 /config/*.json

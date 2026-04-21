@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const env = require('../config/env');
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 12;
@@ -111,7 +112,7 @@ function clearLoginRateLimit(req) {
 }
 
 function requireEmergencyAccess(req, res, next) {
-    if (process.env.ALLOW_EMERGENCY_ADMIN_FIX === 'true') {
+    if (env.allowEmergencyAdminFix) {
         return next();
     }
 

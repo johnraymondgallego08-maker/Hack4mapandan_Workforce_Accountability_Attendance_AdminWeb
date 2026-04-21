@@ -1,18 +1,21 @@
-require('dotenv').config();
 const admin = require('firebase-admin');
 const path = require('path');
+const env = require('./env');
 
 let projectId;
 
 try {
   let serviceAccount;
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  if (env.firebase.serviceAccount) {
     // Support for Vercel/Production: Loading from environment variable string
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    serviceAccount = JSON.parse(env.firebase.serviceAccount);
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+  } else if (env.firebase.googleApplicationCredentials) {
     // Support for Local: Loading from file path
-    const serviceAccountPath = path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    const serviceAccountPath = path.resolve(process.cwd(), env.firebase.googleApplicationCredentials);
     serviceAccount = require(serviceAccountPath);
   } else {
     throw new Error('Neither FIREBASE_SERVICE_ACCOUNT nor GOOGLE_APPLICATION_CREDENTIALS is set');
@@ -23,11 +26,11 @@ try {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     databaseURL: `https://${projectId}.firebaseio.com`,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || undefined
+    storageBucket: env.firebase.storageBucket || undefined
   });
 } catch (error) {
   console.error('Firebase Admin SDK initialization error:', error.message);
-  console.error('Please ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly in your .env file and points to a valid service account key file.');
+  console.error('Please ensure FIREBASE_SERVICE_ACCOUNT or GOOGLE_APPLICATION_CREDENTIALS is configured correctly.');
   process.exit(1);
 }
 

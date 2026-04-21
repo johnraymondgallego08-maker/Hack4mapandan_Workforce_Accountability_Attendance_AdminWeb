@@ -12,11 +12,13 @@ const adminMiddleware = require("../middlewares/adminMiddleware");
 const securityMiddleware = require('../middlewares/securityMiddleware');
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
+const env = require('../config/env');
 
 // Temp storage — controller will move file to correct employee folder
 // Add limits and fileFilter to avoid invalid uploads
 const upload = multer({
-    dest: path.join(__dirname, '../public/uploads/'),
+    dest: path.join(os.tmpdir(), '4dmin-panel-uploads'),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
     fileFilter: (req, file, cb) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -70,7 +72,7 @@ router.get("/manage-payroll", adminMiddleware.isAdmin, payrollController.manageP
 router.get('/debug/payroll-scan', adminMiddleware.isAdmin, payrollController.debugPayrollScan);
 // Dev-only payroll scan (enabled when ALLOW_DEV_DEBUG=true)
 router.get('/dev/payroll-scan', async (req, res) => {
-    if (process.env.ALLOW_DEV_DEBUG === 'true') {
+    if (env.allowDevDebug) {
         return payrollController.debugPayrollScan(req, res);
     }
     res.status(403).send('Dev debug endpoints are disabled. Set ALLOW_DEV_DEBUG=true to enable.');

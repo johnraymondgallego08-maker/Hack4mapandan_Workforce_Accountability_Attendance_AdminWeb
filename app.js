@@ -4,14 +4,14 @@ if (util.isArray) util.isArray = Array.isArray;
 
 const express = require("express");
 const path = require("path");
+const os = require("os");
 require("dotenv").config();
 // Initialize Firebase Admin SDK
 const { admin, db, projectId } = require('./config/firebaseAdmin');
-const session = require("express-session");
 const expressLayouts = require("express-ejs-layouts");
-const flash = require("connect-flash");
 const multer = require("multer");
 const helmet = require("helmet");
+const env = require('./config/env');
 
 const webRoutes = require("./routes/web");
 const adminRoutes = require("./routes/adminRoutes");
@@ -23,11 +23,12 @@ const userModel = require("./models/userModel");
 const authMiddleware = require("./middlewares/authMiddleware");
 const adminMiddleware = require("./middlewares/adminMiddleware");
 const securityMiddleware = require("./middlewares/securityMiddleware");
+const { sessionMiddleware, flashMiddleware } = require("./middlewares/sessionMiddleware");
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'public/uploads/')
+        cb(null, path.join(os.tmpdir(), '4dmin-panel-uploads'))
     },
     filename: function (req, file, cb) {
         cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname))
@@ -38,7 +39,7 @@ const upload = multer({ storage: storage });
 const app = express();
 app.disable('x-powered-by');
 
-if (process.env.NODE_ENV === 'production') {
+if (env.isProduction) {
     app.set('trust proxy', 1);
 }
 
@@ -70,20 +71,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use(securityMiddleware.preventCaching);
 
-app.use(session({
-    name: 'admin.sid',
-    secret: process.env.SESSION_SECRET || 'secret-key', // Change this in production
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 12 // 12 hours
-    }
-}));
-
-app.use(flash());
+app.use(sessionMiddleware);
+app.use(flashMiddleware);
 app.use(securityMiddleware.ensureCsrfToken);
 app.use(securityMiddleware.verifyCsrfTokenUnlessMultipart);
 
@@ -113,12 +102,16 @@ app.use(async (req, res, next) => {
     res.locals.user = currentUser;
     res.locals.messages = req.flash();
     res.locals.firebaseConfig = {
-        apiKey: process.env.FIREBASE_API_KEY,
-        authDomain: process.env.FIREBASE_AUTH_DOMAIN || (projectId ? `${projectId}.firebaseapp.com` : null),
+        apiKey: env.firebase.apiKey,
+        authDomain: env.firebase.authDomain || (projectId ? `${projectId}.firebaseapp.com` : null),
         projectId: projectId, // Use the projectId from firebaseAdmin.js
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.FIREBASE_APP_ID
+        storageBucket: env.firebase.storageBucket,
+        messagingSenderId: env.firebase.messagingSenderId,
+        appId: env.firebase.appId
+    };
+    res.locals.runtime = {
+        isVercel: env.isVercel,
+        realtimeProvider: 'firestore'
     };
     res.locals.path = req.path;
     next();
@@ -200,95 +193,5 @@ app.get('/fix-login', securityMiddleware.requireEmergencyAccess, async (req, res
         res.status(500).send(`Error fixing login: ${error.message}`);
     }
 });
-
-const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 3000;
-const MAX_PORT_TRIES = 10;
-
-let realtimeService = null;
-
-function startServer(port, attemptsLeft = MAX_PORT_TRIES) {
-    // Create HTTP server for Socket.io
-    const server = http.createServer(app);
-    
-    // On Vercel, Socket.io and persistent listeners won't work as expected.
-    // We only initialize them if NOT on Vercel/Production.
-    if (!process.env.VERCEL) {
-        const io = socketio(server, {
-            cors: {
-                origin: "*",
-                methods: ["GET", "POST"]
-            },
-            transports: ['websocket']
-        });
-
-        realtimeService = new RealtimeService(io);
-        realtimeService.initialize();
-    }
-
-    server.listen(port, async () => {
-        if (admin.apps.length) {
-            console.log(`✅ Firebase Admin SDK initialized for project: ${projectId}`);
-            try {
-                await db.listCollections();
-                console.log(`✅ Connected to database: ${projectId}`);
-            } catch (error) {
-                console.error('❌ Failed to connect to database:', error.message);
-            }
-
-            try {
-                await admin.auth().listUsers(1);
-                console.log(`✅ Connected to Authentication service.`);
-            } catch (error) {
-                console.error('❌ Failed to connect to Authentication service:', error.message);
-            }
-        }
-
-        console.log(`✅ Server running on http://localhost:${port}`);
-        console.log(`✅ Real-time updates enabled (Socket.io listening)`);
-    });
-
-    server.on('error', (err) => {
-        if (err && err.code === 'EADDRINUSE') {
-            console.error(`[APP] Port ${port} is already in use.`);
-            // If PORT was explicitly provided via env, don't silently switch ports.
-            if (process.env.PORT) {
-                console.error('[APP] PORT is set in environment. Please stop the process using that port or set PORT to a different value.');
-                process.exit(1);
-            }
-
-            if (attemptsLeft > 0) {
-                const nextPort = port + 1;
-                console.log(`[APP] Trying port ${nextPort} (${attemptsLeft - 1} attempts left)...`);
-                setTimeout(() => startServer(nextPort, attemptsLeft - 1), 200);
-            } else {
-                console.error('[APP] All fallback port attempts failed. Please free a port or set the PORT environment variable.');
-                process.exit(1);
-            }
-        } else {
-            console.error('[APP] Server error:', err);
-            process.exit(1);
-        }
-    });
-
-    // Graceful shutdown
-    process.on('SIGINT', () => {
-        console.log('[APP] Shutting down gracefully...');
-        if (realtimeService) {
-            realtimeService.cleanup();
-        }
-        server.close(() => {
-            console.log('[APP] Server closed');
-            process.exit(0);
-        });
-    });
-
-    return server;
-}
-
-// Only start the custom server logic if NOT running on Vercel.
-// Vercel will import the app and handle the invocation.
-if (!process.env.VERCEL) {
-    startServer(DEFAULT_PORT);
-}
 
 module.exports = app;

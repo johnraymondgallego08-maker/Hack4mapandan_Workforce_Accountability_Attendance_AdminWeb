@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log('[EVENTS] Event created successfully');
                         showNotification('Event created successfully!', 'success');
                         createForm.reset();
-                        // Socket.io will update the table in real-time
+                        // Firestore listeners will update the table in real-time
                     } else {
                         const text = await response.text();
                         console.error('[EVENTS] Error:', text);
@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response.ok) {
                     console.log('[EVENTS] Event deleted successfully');
                     showNotification('Event deleted successfully!', 'success');
-                    // Don't reload - let Socket.io handle the table update
+                    // Don't reload - let the realtime listeners handle the table update
                 } else {
                     const text = await response.text();
                     console.error('[EVENTS] Delete error:', text);

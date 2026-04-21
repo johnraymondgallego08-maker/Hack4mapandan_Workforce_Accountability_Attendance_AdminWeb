@@ -1,15 +1,13 @@
-const fs = require('fs');
-const fsp = fs.promises;
-const path = require('path');
+const env = require('../config/env');
 
 let supabase = null;
-const supabaseBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_BUCKET || null;
+const supabaseBucket = env.supabase.bucket || null;
 
 // Initialize Supabase client
 try {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    if (env.supabase.url && env.supabase.key) {
         const { createClient } = require('@supabase/supabase-js');
-        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+        supabase = createClient(env.supabase.url, env.supabase.key);
     }
 } catch (e) {
     console.error('Failed to initialize Supabase client:', e.message);

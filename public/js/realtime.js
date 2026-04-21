@@ -1,153 +1,225 @@
 /**
- * Client-Side Real-Time Socket.io Handler
- * Include this script in views that need real-time updates
- * Usage: <script src="/js/realtime.js"></script>
+ * Client-side real-time adapter powered by Firestore listeners.
+ * Works in local development and on Vercel using Firestore only.
  */
 
 class RealtimeClient {
     constructor() {
-        this.socket = null;
-        this.isConnected = false;
-        this.messageQueue = [];
         this.listeners = new Map();
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.subscriptions = new Map();
+        this.roomInitialised = new Set();
+        this.pendingRefreshReason = null;
+        this.refreshTimer = null;
+        this.isConnected = false;
 
-        // Auto-detect page name from URL for better logging
-        const path = window.location.pathname;
-        const segment = path.split('/').filter(Boolean).pop();
-        this.pageName = path === '/' ? 'Dashboard' : 
-                       (segment ? segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Admin');
-        
-        console.log(`[REALTIME] Auto-detected page: ${this.pageName}`);
+        const currentPath = window.location.pathname;
+        const segment = currentPath.split('/').filter(Boolean).pop();
+        this.pageName = currentPath === '/'
+            ? 'Dashboard'
+            : (segment ? segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Admin');
 
         this.init();
     }
 
     init() {
-        if (typeof io === 'undefined') {
-            console.warn('[REALTIME] ❌ Socket.io library not loaded');
+        if (!window.db || typeof firebase === 'undefined' || !firebase.firestore) {
+            console.warn('[REALTIME] Firestore is not available on this page.');
             return;
         }
 
-        console.log('[REALTIME] 🔌 Initializing Socket.io connection...');
-
-        this.socket = io({
-            query: { page: this.pageName },
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            reconnectionAttempts: this.maxReconnectAttempts,
-            transports: ['websocket']
+        this.isConnected = true;
+        this.initPageAutoRealtime();
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.pendingRefreshReason) {
+                this.reloadPage(this.pendingRefreshReason);
+            }
         });
-
-        // Initialize Real-Time Turbo client-side optimizations
-        if (window.realtimeTurbo && typeof window.realtimeTurbo.initFastListeners === 'function') {
-            window.realtimeTurbo.initFastListeners(this.socket);
-        }
-
-        this.socket.on('connect', () => {
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            console.log(`[REALTIME] ✅ Page Connected: ${this.pageName} (${this.socket.id})`);
-            this.processQueue();
-            this.onConnect?.();
-        });
-
-        this.socket.on('disconnect', () => {
-            this.isConnected = false;
-            console.log('[REALTIME] ❌ Disconnected from server');
-            this.onDisconnect?.();
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('[REALTIME] 🔴 Connection error:', error);
-            this.reconnectAttempts++;
-        });
-
-        this.socket.on('reconnect_attempt', () => {
-            console.log(`[REALTIME] 🔄 Reconnection attempt ${this.reconnectAttempts}...`);
-        });
-
-        // Event listeners
-        this.socket.on('event-created', (data) => this.triggerListener('event-created', data));
-        this.socket.on('event-updated', (data) => this.triggerListener('event-updated', data));
-        this.socket.on('event-deleted', (data) => this.triggerListener('event-deleted', data));
-
-        // Attendance listeners
-        this.socket.on('attendance-updated', (data) => this.triggerListener('attendance-updated', data));
-
-        // Leave listeners
-        this.socket.on('leave-updated', (data) => this.triggerListener('leave-updated', data));
-
-        // Payroll listeners
-        this.socket.on('payroll-updated', (data) => this.triggerListener('payroll-updated', data));
-
-        // Overtime listeners
-        this.socket.on('overtime-updated', (data) => this.triggerListener('overtime-updated', data));
+        console.log('[REALTIME] Firestore real-time listeners enabled for', this.pageName);
     }
 
-    /**
-     * Subscribe to a real-time update event
-     */
+    getPageRealtimeConfig() {
+        const pathname = window.location.pathname;
+        const rules = [
+            { match: /^\//, rooms: ['attendance', 'leave', 'payroll', 'overtime', 'events', 'users'], exact: true },
+            { match: /^\/attendance$/, rooms: ['attendance', 'leave', 'payroll', 'overtime', 'events', 'users'] },
+            { match: /^\/attendance-monitor$/, rooms: ['attendance', 'users'] },
+            { match: /^\/attendance\/summary/, rooms: ['attendance', 'users'] },
+            { match: /^\/attendance\/add$/, rooms: ['attendance', 'users'] },
+            { match: /^\/manage-events$/, rooms: ['events'] },
+            { match: /^\/manage-events\/edit\//, rooms: ['events'] },
+            { match: /^\/manage-leave$/, rooms: ['leave', 'users'] },
+            { match: /^\/manage-payroll$/, rooms: ['payroll', 'attendance', 'users'] },
+            { match: /^\/payroll\/edit\//, rooms: ['payroll', 'attendance', 'users'] },
+            { match: /^\/manage-overtime$/, rooms: ['overtime', 'attendance', 'users'] },
+            { match: /^\/manage-users$/, rooms: ['users'] },
+            { match: /^\/users\/edit\//, rooms: ['users'] },
+            { match: /^\/user-info$/, rooms: ['users'] },
+            { match: /^\/monitor-user$/, rooms: ['users', 'attendance'] },
+            { match: /^\/device-recognition$/, rooms: ['attendance', 'users'] },
+            { match: /^\/image-recognition$/, rooms: ['attendance', 'users'] }
+        ];
+
+        const matched = rules.find((rule) => {
+            if (rule.exact) return pathname === '/';
+            return rule.match.test(pathname);
+        });
+        return matched || { rooms: [] };
+    }
+
+    initPageAutoRealtime() {
+        const config = this.getPageRealtimeConfig();
+        const roomEventMap = {
+            events: ['event-created', 'event-updated', 'event-deleted'],
+            attendance: ['attendance-updated'],
+            leave: ['leave-updated'],
+            payroll: ['payroll-updated'],
+            overtime: ['overtime-updated'],
+            users: ['user-updated']
+        };
+
+        (config.rooms || []).forEach((room) => {
+            this.joinRoom(room);
+            (roomEventMap[room] || []).forEach((eventName) => {
+                this.on(eventName, () => this.scheduleRefresh(eventName));
+            });
+        });
+    }
+
+    scheduleRefresh(reason) {
+        if (this.refreshTimer) {
+            return;
+        }
+
+        this.pendingRefreshReason = reason;
+        this.refreshTimer = window.setTimeout(() => {
+            if (document.hidden) {
+                this.refreshTimer = null;
+                return;
+            }
+            this.reloadPage(reason);
+        }, 900);
+    }
+
+    reloadPage(reason) {
+        this.pendingRefreshReason = null;
+        if (this.refreshTimer) {
+            window.clearTimeout(this.refreshTimer);
+            this.refreshTimer = null;
+        }
+        console.log('[REALTIME] Refreshing page due to', reason);
+        window.location.reload();
+    }
+
     on(eventName, callback) {
         if (!this.listeners.has(eventName)) {
             this.listeners.set(eventName, []);
         }
         this.listeners.get(eventName).push(callback);
-        console.log(`[REALTIME] 📡 Listener registered for: ${eventName}`);
     }
 
-    /**
-     * Trigger all listeners for an event
-     */
     triggerListener(eventName, data) {
         const callbacks = this.listeners.get(eventName) || [];
-        console.log(`[REALTIME] 📢 Triggering ${callbacks.length} listeners for: ${eventName}`);
         callbacks.forEach((callback) => {
             try {
                 callback(data);
             } catch (err) {
-                console.error(`[REALTIME] ⚠️ Error in listener for ${eventName}:`, err);
+                console.error('[REALTIME] Listener error for', eventName, err);
             }
         });
     }
 
-    /**
-     * Join a room for real-time updates
-     */
     joinRoom(room) {
-        console.log(`[REALTIME] 🚪 Joining room: ${room}`);
-        if (this.isConnected) {
-            this.socket.emit(`join-${room}`, { page: this.pageName });
-        } else {
-            console.log(`[REALTIME] ⏳ Queuing join-${room} (waiting for connection)`);
-            this.messageQueue.push(() => this.socket.emit(`join-${room}`, { page: this.pageName }));
+        if (this.roomInitialised.has(room)) {
+            return;
+        }
+        this.roomInitialised.add(room);
+        this.attachFirestoreListeners(room);
+    }
+
+    attachFirestoreListeners(room) {
+        const firestore = firebase.firestore();
+        const register = (key, query, handler) => {
+            const unsubscribe = query.onSnapshot((snapshot) => {
+                const changes = snapshot.docChanges();
+                if (!changes.length) return;
+                if (!this.subscriptions.get(key)?.ready) {
+                    this.subscriptions.set(key, { unsubscribe, ready: true });
+                    return;
+                }
+                changes.forEach((change) => handler(change));
+            }, (error) => {
+                console.error('[REALTIME] Firestore listener error for', key, error);
+            });
+            this.subscriptions.set(key, { unsubscribe, ready: false });
+        };
+
+        if (room === 'events') {
+            register('events', firestore.collection('events_announcements'), (change) => {
+                const data = { id: change.doc.id, ...change.doc.data() };
+                if (data.system) return;
+                if (change.type === 'added') this.triggerListener('event-created', data);
+                if (change.type === 'modified') this.triggerListener('event-updated', data);
+                if (change.type === 'removed') this.triggerListener('event-deleted', data);
+            });
+            return;
+        }
+
+        if (room === 'attendance') {
+            register('attendance', firestore.collection('attendance'), (change) => {
+                this.triggerListener('attendance-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
+            return;
+        }
+
+        if (room === 'leave') {
+            register('leave', firestore.collectionGroup('leaves'), (change) => {
+                this.triggerListener('leave-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
+            return;
+        }
+
+        if (room === 'payroll') {
+            register('payroll', firestore.collectionGroup('payroll'), (change) => {
+                this.triggerListener('payroll-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
+            return;
+        }
+
+        if (room === 'overtime') {
+            register('overtime-main', firestore.collection('overtime'), (change) => {
+                this.triggerListener('overtime-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
+            register('overtime-attendance', firestore.collection('attendance'), (change) => {
+                const data = change.doc.data() || {};
+                const isRequested = data.isOTRequested === true || String(data.isOTRequested).toLowerCase() === 'true' || data.otStatus;
+                if (!isRequested) return;
+                this.triggerListener('overtime-updated', { id: change.doc.id, ...data, changeType: change.type });
+            });
+            return;
+        }
+
+        if (room === 'users') {
+            register('users-employees', firestore.collection('employees'), (change) => {
+                this.triggerListener('user-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
+            register('users-admin', firestore.collection('Admin'), (change) => {
+                this.triggerListener('user-updated', { id: change.doc.id, ...change.doc.data(), changeType: change.type });
+            });
         }
     }
 
-    /**
-     * Process queued messages after connection
-     */
-    processQueue() {
-        console.log(`[REALTIME] 📤 Processing ${this.messageQueue.length} queued messages`);
-        while (this.messageQueue.length > 0) {
-            const msg = this.messageQueue.shift();
-            msg();
-        }
-    }
-
-    /**
-     * Disconnect from the server
-     */
     disconnect() {
-        if (this.socket) {
-            console.log('[REALTIME] 🔌 Disconnecting from server');
-            this.socket.disconnect();
+        if (this.refreshTimer) {
+            window.clearTimeout(this.refreshTimer);
+            this.refreshTimer = null;
         }
+        this.subscriptions.forEach((entry) => {
+            if (entry && typeof entry.unsubscribe === 'function') {
+                entry.unsubscribe();
+            }
+        });
+        this.subscriptions.clear();
     }
 }
 
-// Global instance
 window.realtime = new RealtimeClient();
-console.log('[REALTIME] ✨ RealtimeClient initialized');

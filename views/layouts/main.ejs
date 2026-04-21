@@ -527,16 +527,20 @@
                     appId: "<%= locals.firebaseConfig ? locals.firebaseConfig.appId : '' %>"
                 };
 
+                window.appRuntime = {
+                    isVercel: <%= locals.runtime && locals.runtime.isVercel ? 'true' : 'false' %>,
+                    realtimeProvider: "<%= locals.runtime ? locals.runtime.realtimeProvider : 'firestore' %>"
+                };
+
                 if (firebaseConfig && firebaseConfig.apiKey) {
-                    firebase.initializeApp(firebaseConfig);
+                    if (!firebase.apps.length) {
+                        firebase.initializeApp(firebaseConfig);
+                    }
                     window.db = firebase.firestore();
                 }
             </script>
 
-            <!-- Socket.io for Real-Time Updates -->
-            <script src="/socket.io/socket.io.min.js"></script>
             <script src="/js/realtime.js"></script>
-            <script src="/js/socket-diagnostics.js"></script>
             
             <!-- Table Sorting & Pagination -->
             <script src="/js/table-sorting-pagination.js"></script>

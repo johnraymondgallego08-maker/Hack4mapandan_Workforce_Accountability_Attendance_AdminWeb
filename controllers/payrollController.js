@@ -2,6 +2,7 @@ const payrollModel = require('../models/payrollModel');
 const userModel = require('../models/userModel');
 const attendanceModel = require('../models/attendanceModel');
 const { db } = require('../config/firebaseAdmin');
+const env = require('../config/env');
 
 // Helper to safely handle Firestore Timestamps or Strings
 function parseDate(dateInput) {
@@ -437,7 +438,7 @@ exports.managePayroll = async (req, res) => {
         });
 
         // Enable optional debug logging by setting DEBUG_PAYROLL_MATCH=1 in your environment
-        const debugPayroll = !!process.env.DEBUG_PAYROLL_MATCH;
+        const debugPayroll = env.debugPayrollMatch;
 
         // Index existing payroll records by several possible identifiers so matching is resilient
         processedDatabaseRecords.forEach(p => {

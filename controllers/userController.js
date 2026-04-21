@@ -5,6 +5,7 @@ const firebaseAdmin = require('../config/firebaseAdmin');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
+const supabaseImageService = require('../services/supabaseImageService');
 
 function isAdminLikeRole(roleValue) {
     const role = String(roleValue || '').trim().toLowerCase();
@@ -33,6 +34,44 @@ function normalizeEmploymentType(value, fallback = '') {
         return 'Part-Time';
     }
     return fallback;
+}
+
+function sanitizeFileName(value = '') {
+    return String(value || '')
+        .trim()
+        .replace(/[^a-z0-9_-]/gi, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+}
+
+async function handleProfileImageUpload(file, userId, displayName) {
+    if (!file) return null;
+
+    const safeBaseName = sanitizeFileName(displayName) || `user-${Date.now()}`;
+    const extension = path.extname(file.originalname || file.filename || '') || '.jpg';
+    const remotePath = `employee-images/${userId}/${safeBaseName}-${Date.now()}${extension}`;
+    const mimeType = String(file.mimetype || '').toLowerCase();
+
+    try {
+        if (supabaseImageService.isConfigured()) {
+            const buffer = await fsp.readFile(file.path);
+            const uploadResult = await supabaseImageService.uploadToSupabase(buffer, remotePath, mimeType || 'image/jpeg');
+            try { await fsp.unlink(file.path); } catch (e) {}
+            return uploadResult.imageUrl;
+        }
+
+        const folderBaseName = String(displayName || 'Unknown').replace(/[^a-z0-9]/gi, '_');
+        const folderName = `${folderBaseName}_${userId}`;
+        const targetDir = path.join(__dirname, '../public/employee_images', folderName);
+        await fsp.mkdir(targetDir, { recursive: true });
+        const targetPath = path.join(targetDir, 'profile.jpg');
+        await fsp.rename(file.path, targetPath);
+        return `/employee_images/${folderName}/profile.jpg`;
+    } catch (error) {
+        try { if (file && file.path) await fsp.unlink(file.path); } catch (e) {}
+        throw error;
+    }
 }
 
 exports.manageUsers = async (req, res) => {
@@ -90,20 +129,16 @@ exports.updateProfile = async (req, res) => {
         // Handle Profile Image
         if (req.file) {
             const user = await userModel.getUserById(userId);
-            // Use the name from body or existing user data, fallback to 'Unknown'
-            const folderBaseName = (name || (user ? user.name : null) || 'Unknown').replace(/[^a-z0-9]/gi, '_');
-            const folderName = `${folderBaseName}_${userId}`;
-            const targetDir = path.join(__dirname, '../public/employee_images', folderName);
-
             try {
-                await fsp.mkdir(targetDir, { recursive: true });
-                const targetPath = path.join(targetDir, 'profile.jpg');
-                await fsp.rename(req.file.path, targetPath);
-                dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
-                dbUpdates.photoUrl = dbUpdates.profileImage; // Keep both in sync
+                const uploadedImageUrl = await handleProfileImageUpload(
+                    req.file,
+                    userId,
+                    name || (user ? user.name : null) || 'Unknown'
+                );
+                dbUpdates.profileImage = uploadedImageUrl;
+                dbUpdates.photoUrl = uploadedImageUrl;
             } catch (err) {
                 console.error('Failed to save profile image:', err);
-                try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
                 req.flash('error', 'Failed to save profile image.');
                 return res.redirect('/user-info');
             }
@@ -235,18 +270,12 @@ exports.updateUser = async (req, res) => {
 
         // 3. Handle Profile Photo Upload → save to employee's own folder
         if (req.file) {
-            const safeName = (name || 'Unknown').replace(/[^a-z0-9]/gi, '_');
-            const folderName = `${safeName}_${userId}`;
-            const targetDir = path.join(__dirname, '../public/employee_images', folderName);
             try {
-                await fsp.mkdir(targetDir, { recursive: true });
-                const targetPath = path.join(targetDir, 'profile.jpg');
-                await fsp.rename(req.file.path, targetPath);
-                dbUpdates.profileImage = `/employee_images/${folderName}/profile.jpg`;
-                dbUpdates.photoUrl = dbUpdates.profileImage;
+                const uploadedImageUrl = await handleProfileImageUpload(req.file, userId, name || existingUser.name || 'Unknown');
+                dbUpdates.profileImage = uploadedImageUrl;
+                dbUpdates.photoUrl = uploadedImageUrl;
             } catch (err) {
                 console.error('Failed to save profile image:', err);
-                try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
                 req.flash('error', 'Failed to save profile image.');
                 return res.redirect('/manage-users');
             }
