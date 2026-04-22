@@ -10,10 +10,10 @@
     const workforcePulse = typeof employeeStatusList !== 'undefined' ? employeeStatusList : [];
     const activityFeed = typeof recentActivity !== 'undefined' ? recentActivity : [];
     const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
-    const holidayMonthLabel = typeof holidayMonthLabel !== 'undefined' ? holidayMonthLabel : '';
-    const dashboardCharts = typeof dashboardCharts !== 'undefined' ? dashboardCharts : {};
-    const attendanceChartData = dashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
-    const overtimeChartData = dashboardCharts.overtime || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [0, 0, 0, 0, 0, 0, 0] };
+    const currentHolidayMonthLabel = typeof locals.holidayMonthLabel !== 'undefined' ? locals.holidayMonthLabel : '';
+    const currentDashboardCharts = typeof locals.dashboardCharts !== 'undefined' ? locals.dashboardCharts : {};
+    const attendanceChartData = currentDashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
+    const overtimeChartData = currentDashboardCharts.overtime || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [0, 0, 0, 0, 0, 0, 0] };
 %>
 
 <div class="dashboard-shell">
@@ -200,12 +200,12 @@
             </div>
 
             <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0;">
-                <table id="recentActivityTable\">
+                <table id="recentActivityTable">
                     <thead>
                         <tr>
-                            <th data-sortable=\"true\">Employee</th>
-                            <th data-sortable=\"true\">Log Time</th>
-                            <th style=\"text-align: right;\" data-sortable=\"true\">Date</th>
+                            <th data-sortable="true">Employee</th>
+                            <th data-sortable="true">Log Time</th>
+                            <th style="text-align: right;" data-sortable="true">Date</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -246,7 +246,7 @@
         <div class="dashboard-panel dashboard-panel--holidays">
             <div class="card-header">
                 <h3>Holidays This Month</h3>
-                <span style="font-size: 0.85rem; color: var(--text-muted);"><%= holidayMonthLabel || '' %></span>
+                <span style="font-size: 0.85rem; color: var(--text-muted);"><%= currentHolidayMonthLabel || '' %></span>
             </div>
 
             <div class="holiday-list">

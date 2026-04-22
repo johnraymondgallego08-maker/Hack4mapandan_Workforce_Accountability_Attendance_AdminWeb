@@ -3,6 +3,7 @@ const userModel = require('../models/userModel');
 const attendanceModel = require('../models/attendanceModel');
 const { db } = require('../config/firebaseAdmin');
 const env = require('../config/env');
+const APP_TIMEZONE = 'Asia/Manila';
 
 // Helper to safely handle Firestore Timestamps or Strings
 function parseDate(dateInput) {
@@ -10,6 +11,15 @@ function parseDate(dateInput) {
     if (dateInput.toDate && typeof dateInput.toDate === 'function') return dateInput.toDate();
     const d = new Date(dateInput);
     return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateOnly(value, options = {}) {
+    const date = parseDate(value);
+    if (!date) return null;
+    return date.toLocaleDateString('en-US', {
+        timeZone: APP_TIMEZONE,
+        ...options
+    });
 }
 
 // Helper to robustly parse numeric values, handling currency symbols
@@ -219,7 +229,7 @@ function normalizeDailyLogEntries(record) {
             .map(entry => {
                 const dateObj = parseDate(entry.date || entry.day || entry.timestamp);
                 const dateLabel = dateObj
-                    ? dateObj.toLocaleDateString('en-US')
+                    ? formatDateOnly(dateObj)
                     : (entry.date || entry.day || 'N/A');
                 const hours = getNumericValue(entry.hours || entry.workHours || entry.totalHours || 0);
                 const amount = getNumericValue(getFirstDefinedValue(
@@ -300,7 +310,7 @@ function buildDailyHistory(record, attendanceRecords, user) {
         const timeOut = parseDate(entry.timeOut);
         if (!timeIn) return;
 
-        const dateKey = timeIn.toLocaleDateString('en-US');
+        const dateKey = formatDateOnly(timeIn);
         const hours = timeOut ? Math.max(0, (timeOut - timeIn) / (1000 * 60 * 60)) : 0;
         const existingDay = groupedByDate.get(dateKey) || {
             date: dateKey,
@@ -429,7 +439,7 @@ exports.managePayroll = async (req, res) => {
                 pIdx,
                 employeeId: empId,
                 employeeName: p.employeeName || p.name || 'Unknown Employee',
-                paymentDate: dateObj ? dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
+                paymentDate: dateObj ? formatDateOnly(dateObj, { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
                 period: periodLabel,
                 netPay: getPayrollAmountValue(p).toFixed(2),
                 month: dateObj ? dateObj.getMonth() : -1,
@@ -484,8 +494,8 @@ exports.managePayroll = async (req, res) => {
         }
 
         const dateFormat = { month: 'long', day: 'numeric', year: 'numeric' };
-        const midMonthDateStr = new Date(y, m, 15).toLocaleDateString('en-US', dateFormat);
-        const endOfMonthDateStr = new Date(y, m + 1, 0).toLocaleDateString('en-US', dateFormat);
+        const midMonthDateStr = formatDateOnly(new Date(y, m, 15), dateFormat);
+        const endOfMonthDateStr = formatDateOnly(new Date(y, m + 1, 0), dateFormat);
 
         const finalPayroll = [];
         const dailyHistorySyncTasks = [];

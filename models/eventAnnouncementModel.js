@@ -2,6 +2,7 @@ const { db, admin } = require('../config/firebaseAdmin');
 
 const COLLECTION_NAME = 'events_announcements';
 const BOOTSTRAP_DOC_ID = 'bootstrap_config';
+const APP_TIMEZONE = 'Asia/Manila';
 
 function normalizeStatus(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -24,6 +25,7 @@ function formatDateTime(value) {
     const date = toValidDate(value);
     if (!date) return null;
     return date.toLocaleString('en-US', {
+        timeZone: APP_TIMEZONE,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -39,6 +41,7 @@ function formatScheduleLabel(data = {}) {
 
     if (dateValue) {
         parts.push(dateValue.toLocaleDateString('en-US', {
+            timeZone: APP_TIMEZONE,
             year: 'numeric',
             month: 'long',
             day: 'numeric'
