@@ -534,10 +534,14 @@
 
                 window.firebaseClientReady = false;
                 window.firebaseClientConfigError = '';
+                window.firebaseClientConfigWarning = '';
 
-                const missingFirebaseClientVars = Object.entries(firebaseConfig)
-                    .filter(([, value]) => !String(value || '').trim())
-                    .map(([key]) => key);
+                const requiredFirebaseClientVars = ['apiKey', 'authDomain', 'projectId'];
+                const optionalFirebaseClientVars = ['storageBucket', 'messagingSenderId', 'appId'];
+                const missingFirebaseClientVars = requiredFirebaseClientVars
+                    .filter((key) => !String(firebaseConfig[key] || '').trim());
+                const missingOptionalFirebaseClientVars = optionalFirebaseClientVars
+                    .filter((key) => !String(firebaseConfig[key] || '').trim());
 
                 if (missingFirebaseClientVars.length > 0) {
                     window.firebaseClientConfigError = `Missing Firebase client config: ${missingFirebaseClientVars.join(', ')}.`;
@@ -555,6 +559,11 @@
                             : 'Failed to initialize Firebase client.';
                         console.error('[FIREBASE CLIENT] Initialization failed:', error);
                     }
+                }
+
+                if (!window.firebaseClientConfigError && missingOptionalFirebaseClientVars.length > 0) {
+                    window.firebaseClientConfigWarning = `Optional Firebase client config is missing: ${missingOptionalFirebaseClientVars.join(', ')}.`;
+                    console.warn('[FIREBASE CLIENT]', window.firebaseClientConfigWarning);
                 }
             </script>
 

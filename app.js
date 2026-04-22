@@ -125,8 +125,8 @@ app.use(async (req, res, next) => {
     res.locals.messages = req.flash();
     res.locals.firebaseConfig = {
         apiKey: env.firebase.apiKey,
-        authDomain: env.firebase.authDomain || (projectId ? `${projectId}.firebaseapp.com` : null),
-        projectId: projectId, // Use the projectId from firebaseAdmin.js
+        authDomain: env.firebase.authDomain || ((env.firebase.projectId || projectId) ? `${env.firebase.projectId || projectId}.firebaseapp.com` : null),
+        projectId: env.firebase.projectId || projectId,
         storageBucket: env.firebase.storageBucket,
         messagingSenderId: env.firebase.messagingSenderId,
         appId: env.firebase.appId
