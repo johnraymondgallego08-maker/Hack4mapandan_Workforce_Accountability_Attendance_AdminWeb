@@ -565,6 +565,8 @@
                     window.firebaseClientConfigWarning = `Optional Firebase client config is missing: ${missingOptionalFirebaseClientVars.join(', ')}.`;
                     console.warn('[FIREBASE CLIENT]', window.firebaseClientConfigWarning);
                 }
+
+                window.dispatchEvent(new Event('firebase-client-ready'));
             </script>
 
             <script src="/js/realtime.js"></script>
