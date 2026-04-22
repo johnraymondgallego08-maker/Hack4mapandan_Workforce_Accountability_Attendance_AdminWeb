@@ -10,6 +10,10 @@
     const workforcePulse = typeof employeeStatusList !== 'undefined' ? employeeStatusList : [];
     const activityFeed = typeof recentActivity !== 'undefined' ? recentActivity : [];
     const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
+    const holidayMonthLabel = typeof holidayMonthLabel !== 'undefined' ? holidayMonthLabel : '';
+    const dashboardCharts = typeof dashboardCharts !== 'undefined' ? dashboardCharts : {};
+    const attendanceChartData = dashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
+    const overtimeChartData = dashboardCharts.overtime || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [0, 0, 0, 0, 0, 0, 0] };
 %>
 
 <div class="dashboard-shell">
@@ -173,7 +177,7 @@
 
                 <div class="analytics-card">
                     <div class="analytics-card__header">
-                        <span>Weekly Overtime Yield</span>
+                        <span>Overtime Request Hours</span>
                     </div>
                     <div class="analytics-card__canvas">
                         <canvas id="overtimeChart"></canvas>
@@ -241,7 +245,8 @@
 
         <div class="dashboard-panel dashboard-panel--holidays">
             <div class="card-header">
-                <h3>Upcoming Holidays</h3>
+                <h3>Holidays This Month</h3>
+                <span style="font-size: 0.85rem; color: var(--text-muted);"><%= holidayMonthLabel || '' %></span>
             </div>
 
             <div class="holiday-list">
@@ -254,12 +259,12 @@
                             </div>
                             <div class="holiday-item__content">
                                 <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
-                                <span><%= holiday.type || 'Holiday' %></span>
+                                <span><%= holiday.type || 'Holiday' %> • <%= holiday.statusLabel || 'Upcoming' %></span>
                             </div>
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <div class="dashboard-empty-state">No upcoming holidays found.</div>
+                    <div class="dashboard-empty-state">No holidays found for this month.</div>
                 <% } %>
             </div>
         </div>
@@ -275,10 +280,10 @@
         new Chart(ctx1, {
             type: 'doughnut',
             data: {
-                labels: ['Active', 'On Leave', 'Absent'],
+                labels: <%- JSON.stringify(attendanceChartData.labels) %>,
                 datasets: [{
-                    data: [85, 10, 5],
-                    backgroundColor: ['#7c3aed', '#c084fc', '#e4def8'],
+                    data: <%- JSON.stringify(attendanceChartData.values) %>,
+                    backgroundColor: ['#7c3aed', '#38bdf8', '#f59e0b', '#e4def8'],
                     hoverOffset: 14,
                     borderWidth: 0,
                     borderRadius: 8
@@ -310,10 +315,10 @@
         new Chart(ctx2, {
             type: 'bar',
             data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                labels: <%- JSON.stringify(overtimeChartData.labels) %>,
                 datasets: [{
                     label: 'Overtime Hours',
-                    data: [4, 7, 5, 12, 8, 3],
+                    data: <%- JSON.stringify(overtimeChartData.values) %>,
                     backgroundColor: gradient,
                     borderRadius: 12,
                     barThickness: 16
