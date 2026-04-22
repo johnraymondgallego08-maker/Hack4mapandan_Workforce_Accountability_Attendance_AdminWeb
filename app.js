@@ -39,6 +39,14 @@ const upload = multer({ storage: storage });
 const app = express();
 app.disable('x-powered-by');
 
+function getOrigin(urlValue) {
+    try {
+        return new URL(urlValue).origin;
+    } catch (error) {
+        return null;
+    }
+}
+
 function getMissingFirebaseConfig() {
     const missing = [];
 
@@ -70,6 +78,27 @@ app.set("views", path.join(__dirname, "views"));
 app.use(expressLayouts);
 app.set("layout", "layouts/main");
 
+const firebaseAuthDomain = env.firebase.authDomain || ((env.firebase.projectId || projectId) ? `${env.firebase.projectId || projectId}.firebaseapp.com` : '');
+const firebaseAuthOrigin = getOrigin(firebaseAuthDomain.startsWith('http') ? firebaseAuthDomain : `https://${firebaseAuthDomain}`);
+const firebaseConnectSources = [
+    "'self'",
+    "ws://localhost:*",
+    "wss://localhost:*",
+    "https://identitytoolkit.googleapis.com",
+    "https://securetoken.googleapis.com",
+    "https://firestore.googleapis.com",
+    "https://firebaseinstallations.googleapis.com",
+    "https://www.googleapis.com",
+    "https://*.googleapis.com",
+    "https://*.firebaseapp.com",
+    "https://*.firebaseio.com",
+    "https://*.firebasedatabase.app"
+];
+
+if (firebaseAuthOrigin && !firebaseConnectSources.includes(firebaseAuthOrigin)) {
+    firebaseConnectSources.push(firebaseAuthOrigin);
+}
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -77,8 +106,9 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://www.gstatic.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "blob:", "https:"],
-            connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firestore.googleapis.com", "https://www.googleapis.com", "https://*.googleapis.com"],
+            connectSrc: firebaseConnectSources,
             fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+            frameSrc: ["'self'", "https://*.firebaseapp.com"],
             objectSrc: ["'none'"],
             frameAncestors: ["'self'"],
             baseUri: ["'self'"],
