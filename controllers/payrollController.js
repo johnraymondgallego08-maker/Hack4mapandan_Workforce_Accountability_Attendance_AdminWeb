@@ -194,6 +194,41 @@ function chooseDefaultGroupedPayrollDate(groupedRow = {}, referenceDate = new Da
     return getDefaultPayrollDateSelection(referenceDate);
 }
 
+function buildUserLookupMap(users = []) {
+    const lookup = new Map();
+    users.forEach((user) => {
+        if (!user) return;
+        const keys = [
+            String(user.id || '').trim(),
+            String(user.uid || '').trim(),
+            String(user.employeeId || '').trim(),
+            String(user.email || '').trim().toLowerCase()
+        ].filter(Boolean);
+
+        keys.forEach((key) => lookup.set(key, user));
+    });
+    return lookup;
+}
+
+function enrichPayrollRecordWithUser(record = {}, user = {}) {
+    return {
+        ...user,
+        ...record,
+        employeeId: record.employeeId || user.id || user.uid || user.employeeId || '',
+        employeeCode: record.employeeCode || record.employeeId || user.employeeId || '',
+        employeeName: record.employeeName || user.name || user.email || 'Employee',
+        email: record.email || user.email || '',
+        department: record.department || user.department || '',
+        position: record.position || user.position || '',
+        office: record.office || user.office || '',
+        phone: record.phone || user.phone || '',
+        supervisor: record.supervisor || user.supervisor || '',
+        workSchedule: record.workSchedule || user.workSchedule || '',
+        employmentStatus: record.employmentStatus || user.employmentStatus || '',
+        imageUrl: record.imageUrl || user.imageUrl || user.photoUrl || user.profileImage || ''
+    };
+}
+
 function buildPeriodRange(record, fallbackYear, fallbackMonth, fallbackPeriodIdx) {
     let start = parseDate(record.periodStart);
     let end = parseDate(record.periodEnd);
@@ -377,6 +412,7 @@ exports.managePayroll = async (req, res) => {
         const payrollRecords = payrollRecordsRaw || [];
         const users = dedupePayrollUsers(usersRaw || []);
         const attendanceRecords = attendanceRaw || [];
+        const userLookup = buildUserLookupMap(users);
 
         // Parse your specific document ID format: YYYY-MM-P (e.g., 2026-03-1)
         const parseIdInfo = (id) => {
@@ -538,8 +574,9 @@ exports.managePayroll = async (req, res) => {
                 }
             }
             if (midRecord) {
+                const matchedUser = userLookup.get(String(uId).trim()) || userLookup.get(String(employeeCode).trim()) || null;
                 const normalizedRecord = {
-                    ...midRecord,
+                    ...enrichPayrollRecordWithUser(midRecord, matchedUser || u),
                     employeeId: uId,
                     employeeCode: employeeCode || midRecord.employeeId || uId,
                     employeeName: midRecord.employeeName || uName,
@@ -611,8 +648,9 @@ exports.managePayroll = async (req, res) => {
                 }
             }
             if (endRecord) {
+                const matchedUser = userLookup.get(String(uId).trim()) || userLookup.get(String(employeeCode).trim()) || null;
                 const normalizedRecord = {
-                    ...endRecord,
+                    ...enrichPayrollRecordWithUser(endRecord, matchedUser || u),
                     employeeId: uId,
                     employeeCode: employeeCode || endRecord.employeeId || uId,
                     employeeName: endRecord.employeeName || uName,

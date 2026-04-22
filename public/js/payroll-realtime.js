@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 text: message,
                 icon: type,
                 timer: 2000,
-                position: 'top-end',
+                position: 'center',
                 showConfirmButton: false,
             });
         }
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Intercept Process Payroll to prevent page navigation
     document.addEventListener('submit', async (e) => {
         const form = e.target;
-        if (!form.action.includes('/manage-payroll/process/')) return;
+        if (!form.action.includes('/payroll/process/')) return;
 
         e.preventDefault();
         
