@@ -8,8 +8,6 @@ class RealtimeClient {
         this.listeners = new Map();
         this.subscriptions = new Map();
         this.roomInitialised = new Set();
-        this.pendingRefreshReason = null;
-        this.refreshTimer = null;
         this.isConnected = false;
 
         const currentPath = window.location.pathname;
@@ -28,86 +26,7 @@ class RealtimeClient {
         }
 
         this.isConnected = true;
-        this.initPageAutoRealtime();
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && this.pendingRefreshReason) {
-                this.reloadPage(this.pendingRefreshReason);
-            }
-        });
         console.log('[REALTIME] Firestore real-time listeners enabled for', this.pageName);
-    }
-
-    getPageRealtimeConfig() {
-        const pathname = window.location.pathname;
-        const rules = [
-            { match: /^\//, rooms: ['attendance', 'leave', 'payroll', 'overtime', 'events', 'users'], exact: true },
-            { match: /^\/attendance$/, rooms: ['attendance', 'leave', 'payroll', 'overtime', 'events', 'users'] },
-            { match: /^\/attendance-monitor$/, rooms: ['attendance', 'users'] },
-            { match: /^\/attendance\/summary/, rooms: ['attendance', 'users'] },
-            { match: /^\/attendance\/add$/, rooms: ['attendance', 'users'] },
-            { match: /^\/manage-events$/, rooms: ['events'] },
-            { match: /^\/manage-events\/edit\//, rooms: ['events'] },
-            { match: /^\/manage-leave$/, rooms: ['leave', 'users'] },
-            { match: /^\/manage-payroll$/, rooms: ['payroll', 'attendance', 'users'] },
-            { match: /^\/payroll\/edit\//, rooms: ['payroll', 'attendance', 'users'] },
-            { match: /^\/manage-overtime$/, rooms: ['overtime', 'attendance', 'users'] },
-            { match: /^\/manage-users$/, rooms: ['users'] },
-            { match: /^\/users\/edit\//, rooms: ['users'] },
-            { match: /^\/user-info$/, rooms: ['users'] },
-            { match: /^\/monitor-user$/, rooms: ['users', 'attendance'] },
-            { match: /^\/device-recognition$/, rooms: ['attendance', 'users'] },
-            { match: /^\/image-recognition$/, rooms: ['attendance', 'users'] }
-        ];
-
-        const matched = rules.find((rule) => {
-            if (rule.exact) return pathname === '/';
-            return rule.match.test(pathname);
-        });
-        return matched || { rooms: [] };
-    }
-
-    initPageAutoRealtime() {
-        const config = this.getPageRealtimeConfig();
-        const roomEventMap = {
-            events: ['event-created', 'event-updated', 'event-deleted'],
-            attendance: ['attendance-updated'],
-            leave: ['leave-updated'],
-            payroll: ['payroll-updated'],
-            overtime: ['overtime-updated'],
-            users: ['user-updated']
-        };
-
-        (config.rooms || []).forEach((room) => {
-            this.joinRoom(room);
-            (roomEventMap[room] || []).forEach((eventName) => {
-                this.on(eventName, () => this.scheduleRefresh(eventName));
-            });
-        });
-    }
-
-    scheduleRefresh(reason) {
-        if (this.refreshTimer) {
-            return;
-        }
-
-        this.pendingRefreshReason = reason;
-        this.refreshTimer = window.setTimeout(() => {
-            if (document.hidden) {
-                this.refreshTimer = null;
-                return;
-            }
-            this.reloadPage(reason);
-        }, 900);
-    }
-
-    reloadPage(reason) {
-        this.pendingRefreshReason = null;
-        if (this.refreshTimer) {
-            window.clearTimeout(this.refreshTimer);
-            this.refreshTimer = null;
-        }
-        console.log('[REALTIME] Refreshing page due to', reason);
-        window.location.reload();
     }
 
     on(eventName, callback) {
@@ -209,10 +128,6 @@ class RealtimeClient {
     }
 
     disconnect() {
-        if (this.refreshTimer) {
-            window.clearTimeout(this.refreshTimer);
-            this.refreshTimer = null;
-        }
         this.subscriptions.forEach((entry) => {
             if (entry && typeof entry.unsubscribe === 'function') {
                 entry.unsubscribe();

@@ -27,21 +27,32 @@ function normalizeOvertimeStatus(data = {}) {
 function formatDateValue(value) {
     if (!value) return null;
     if (value.toDate && typeof value.toDate === 'function') {
-        return value.toDate().toLocaleString();
+        return value.toDate().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
     }
 
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleString();
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
 }
 
 function formatDisplayDate(value) {
     if (!value) return null;
     try {
         const parsed = value.toDate ? value.toDate() : new Date(value);
-        return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleDateString();
+        return Number.isNaN(parsed.getTime())
+            ? String(value)
+            : parsed.toLocaleDateString('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
     } catch (error) {
         return String(value);
     }
+}
+
+function getOvertimeDateSource(data = {}) {
+    return data.timeIn || data.timestamp || data.requestedDate || data.createdAt || data.date || data._ts || null;
 }
 
 exports.getAll = async () => {
@@ -97,10 +108,10 @@ exports.getAll = async () => {
             const normalizedStatus = normalizeOvertimeStatus(data);
             if (!normalizedStatus) return;
             // Keep original date object for sorting (overtime occurrence date or fallback to timestamp)
-            const sortDate = data.date || data.timeIn || data.timestamp || data.createdAt || data.requestedDate;
+            const sortDate = getOvertimeDateSource(data);
 
             // Normalize displayed fields
-            const dateSource = data.date || data.timeIn || data.timestamp;
+            const dateSource = getOvertimeDateSource(data);
             const displayDate = formatDisplayDate(dateSource);
 
             // Ensure requestedDate doesn't fall back to null if timestamp exists
