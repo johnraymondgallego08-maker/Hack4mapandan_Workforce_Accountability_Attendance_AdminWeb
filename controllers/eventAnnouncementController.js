@@ -2,6 +2,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const sanitizeHtml = require('sanitize-html');
+const env = require('../config/env');
 const eventAnnouncementModel = require('../models/eventAnnouncementModel');
 const supabaseImageService = require('../services/supabaseImageService');
 const LOCAL_EVENT_UPLOAD_DIR = path.join(__dirname, '../public/uploads/events-announcements');
@@ -96,6 +97,10 @@ async function uploadEventImage(file, title) {
         }
     }
 
+    if (env.isVercel) {
+        throw new Error('Image upload requires a working Supabase server key on Vercel. Set SUPABASE_SERVICE_ROLE_KEY and a valid SUPABASE_STORAGE_BUCKET.');
+    }
+
     return saveEventImageLocally(file.path, fileName);
 }
 
@@ -147,7 +152,7 @@ exports.createEvent = async (req, res) => {
                 } catch (err) {
                     console.error('[EVENT] Image upload failed:', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    return respondError(req, res, '/manage-events', 'Failed to upload image to storage.', 500);
+                    return respondError(req, res, '/manage-events', err.message || 'Failed to upload image to storage.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
@@ -230,7 +235,7 @@ exports.updateEvent = async (req, res) => {
                 } catch (err) {
                     console.error('[EVENT] Image upload failed (update):', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    return respondError(req, res, `/manage-events/edit/${id}`, 'Failed to upload image to storage.', 500);
+                    return respondError(req, res, `/manage-events/edit/${id}`, err.message || 'Failed to upload image to storage.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
