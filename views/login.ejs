@@ -44,6 +44,41 @@
         errorMessageDiv.style.display = 'block';
     }
 
+    function getFriendlyFirebaseAuthError(error) {
+        const code = String(error && error.code ? error.code : '').trim();
+        const message = String(error && error.message ? error.message : '').trim();
+
+        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-login-credentials') {
+            return 'Invalid email or password.';
+        }
+
+        if (code === 'auth/invalid-email') {
+            return 'Enter a valid email address.';
+        }
+
+        if (code === 'auth/user-disabled') {
+            return 'This Firebase account has been disabled.';
+        }
+
+        if (code === 'auth/too-many-requests') {
+            return 'Too many login attempts. Please wait a few minutes and try again.';
+        }
+
+        if (code === 'auth/network-request-failed') {
+            return 'Network error while contacting Firebase. Please check your connection and try again.';
+        }
+
+        if (code === 'auth/operation-not-allowed') {
+            return 'Email/password sign-in is not enabled in Firebase Authentication for this project.';
+        }
+
+        if (message) {
+            return message;
+        }
+
+        return 'Firebase sign-in failed. Please verify your credentials and Firebase Authentication settings.';
+    }
+
     function getFirebaseClientState() {
         return {
             ready: Boolean(window.firebaseClientReady),
@@ -124,8 +159,10 @@
                 throw new Error(errorData.error || 'Server validation failed.');
             }
         } catch (error) {
-            errorMessageDiv.textContent = error.message;
+            const friendlyMessage = getFriendlyFirebaseAuthError(error);
+            errorMessageDiv.textContent = friendlyMessage;
             errorMessageDiv.style.display = 'block';
+            console.error('[LOGIN] Authentication error:', error);
             loginButton.disabled = false;
             loginButton.querySelector('span').textContent = 'Login to Dashboard';
         }
