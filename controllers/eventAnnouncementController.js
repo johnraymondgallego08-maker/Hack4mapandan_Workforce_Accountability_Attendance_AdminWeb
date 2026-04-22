@@ -4,6 +4,7 @@ const path = require('path');
 const sanitizeHtml = require('sanitize-html');
 const eventAnnouncementModel = require('../models/eventAnnouncementModel');
 const supabaseImageService = require('../services/supabaseImageService');
+const LOCAL_EVENT_UPLOAD_DIR = path.join(__dirname, '../public/uploads/events-announcements');
 
 function sanitizeFileName(value = '') {
     return String(value || '')
@@ -41,6 +42,61 @@ function respondSuccess(req, res, redirectPath, message, payload = {}) {
 
     req.flash('success', message);
     return res.redirect(redirectPath);
+}
+
+async function ensureLocalUploadDir() {
+    await fsp.mkdir(LOCAL_EVENT_UPLOAD_DIR, { recursive: true });
+}
+
+function buildEventImageMeta(fileName) {
+    return {
+        imageUrl: `/uploads/events-announcements/${fileName}`,
+        imagePath: `events-announcements/${fileName}`,
+        imageStorage: 'local'
+    };
+}
+
+async function saveEventImageLocally(tempFilePath, fileName) {
+    await ensureLocalUploadDir();
+    const targetPath = path.join(LOCAL_EVENT_UPLOAD_DIR, fileName);
+    await fsp.copyFile(tempFilePath, targetPath);
+    return buildEventImageMeta(fileName);
+}
+
+async function deleteLocalEventImage(imagePath) {
+    if (!imagePath) return;
+    const normalized = String(imagePath).replace(/^\/+/, '').replace(/\\/g, '/');
+    const relativePath = normalized.startsWith('uploads/')
+        ? normalized.slice('uploads/'.length)
+        : normalized;
+    const absolutePath = path.join(__dirname, '../public/uploads', relativePath);
+
+    try {
+        await fsp.unlink(absolutePath);
+    } catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.warn('[EVENT] Could not delete local image:', error.message);
+        }
+    }
+}
+
+async function uploadEventImage(file, title) {
+    const extension = path.extname(file.originalname || file.filename || '') || '.jpg';
+    const base = sanitizeFileName(title) || `entry-${Date.now()}`;
+    const fileName = `${base}-${Date.now()}${extension}`;
+    const destPath = `events-announcements/${fileName}`;
+    const mimetype = String(file.mimetype || '').toLowerCase() || 'image/jpeg';
+
+    if (supabaseImageService.isConfigured()) {
+        try {
+            const buffer = await fsp.readFile(file.path);
+            return await supabaseImageService.uploadToSupabase(buffer, destPath, mimetype);
+        } catch (error) {
+            console.warn('[EVENT] Supabase unavailable, falling back to local storage:', error.message);
+        }
+    }
+
+    return saveEventImageLocally(file.path, fileName);
 }
 
 exports.manageEvents = async (req, res) => {
@@ -82,23 +138,16 @@ exports.createEvent = async (req, res) => {
                     return respondError(req, res, '/manage-events', 'Invalid file type.');
                 }
 
-                const extension = path.extname(req.file.originalname || req.file.filename || '') || '.jpg';
-                const base = sanitizeFileName(title) || `entry-${Date.now()}`;
-                const fileName = `${base}-${Date.now()}${extension}`;
-                const destPath = `events-announcements/${fileName}`;
-
                 try {
-                    const buffer = await fsp.readFile(req.file.path);
-                    const uploadResult = await supabaseImageService.uploadToSupabase(buffer, destPath, mimetype);
-
+                    const uploadResult = await uploadEventImage(req.file, title);
                     data.imageUrl = uploadResult.imageUrl;
                     data.imagePath = uploadResult.imagePath;
                     data.imageStorage = uploadResult.imageStorage;
                     try { await fsp.unlink(req.file.path); } catch (e) {}
                 } catch (err) {
-                    console.error('[EVENT] Supabase upload failed:', err.message);
+                    console.error('[EVENT] Image upload failed:', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    return respondError(req, res, '/manage-events', 'Failed to upload image to storage. Please ensure Supabase is configured properly.', 500);
+                    return respondError(req, res, '/manage-events', 'Failed to upload image to storage.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
@@ -163,31 +212,25 @@ exports.updateEvent = async (req, res) => {
                     return respondError(req, res, `/manage-events/edit/${id}`, 'Invalid file type.');
                 }
 
-                const extension = path.extname(req.file.originalname || req.file.filename || '') || '.jpg';
-                const base = sanitizeFileName(title) || `entry-${Date.now()}`;
-                const fileName = `${base}-${Date.now()}${extension}`;
-                const destPath = `events-announcements/${fileName}`;
-
                 try {
-                    const buffer = await fsp.readFile(req.file.path);
-                    const uploadResult = await supabaseImageService.uploadToSupabase(buffer, destPath, mimetype);
-
+                    const uploadResult = await uploadEventImage(req.file, title);
                     updateData.imageUrl = uploadResult.imageUrl;
                     updateData.imagePath = uploadResult.imagePath;
                     updateData.imageStorage = uploadResult.imageStorage;
                     try { await fsp.unlink(req.file.path); } catch (e) {}
 
-                    // Remove previous Supabase file if present
                     if (existing.imageStorage === 'supabase' && existing.imagePath) {
                         const deleteResult = await supabaseImageService.deleteFromSupabase(existing.imagePath);
                         if (!deleteResult.success) {
                             console.warn('[EVENT] Could not delete previous Supabase image:', deleteResult.error);
                         }
+                    } else if (existing.imageStorage === 'local' && existing.imagePath) {
+                        await deleteLocalEventImage(existing.imagePath);
                     }
                 } catch (err) {
-                    console.error('[EVENT] Supabase upload failed (update):', err.message);
+                    console.error('[EVENT] Image upload failed (update):', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    return respondError(req, res, `/manage-events/edit/${id}`, 'Failed to upload image to storage. Please ensure Supabase is configured properly.', 500);
+                    return respondError(req, res, `/manage-events/edit/${id}`, 'Failed to upload image to storage.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
@@ -226,6 +269,8 @@ exports.deleteEvent = async (req, res) => {
                     console.warn('[EVENT] Could not delete Supabase image:', deleteResult.error);
                 }
             } catch (e) { console.error('Failed to remove image after delete:', e); }
+        } else if (record.imagePath && record.imageStorage === 'local') {
+            await deleteLocalEventImage(record.imagePath);
         }
 
         return respondSuccess(req, res, '/manage-events', 'Record deleted successfully.', { id });
