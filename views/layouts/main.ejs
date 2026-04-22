@@ -532,11 +532,29 @@
                     realtimeProvider: "<%= locals.runtime ? locals.runtime.realtimeProvider : 'firestore' %>"
                 };
 
-                if (firebaseConfig && firebaseConfig.apiKey) {
-                    if (!firebase.apps.length) {
-                        firebase.initializeApp(firebaseConfig);
+                window.firebaseClientReady = false;
+                window.firebaseClientConfigError = '';
+
+                const missingFirebaseClientVars = Object.entries(firebaseConfig)
+                    .filter(([, value]) => !String(value || '').trim())
+                    .map(([key]) => key);
+
+                if (missingFirebaseClientVars.length > 0) {
+                    window.firebaseClientConfigError = `Missing Firebase client config: ${missingFirebaseClientVars.join(', ')}.`;
+                    console.error('[FIREBASE CLIENT]', window.firebaseClientConfigError);
+                } else {
+                    try {
+                        if (!firebase.apps.length) {
+                            firebase.initializeApp(firebaseConfig);
+                        }
+                        window.db = firebase.firestore();
+                        window.firebaseClientReady = true;
+                    } catch (error) {
+                        window.firebaseClientConfigError = error && error.message
+                            ? error.message
+                            : 'Failed to initialize Firebase client.';
+                        console.error('[FIREBASE CLIENT] Initialization failed:', error);
                     }
-                    window.db = firebase.firestore();
                 }
             </script>
 

@@ -38,9 +38,29 @@
     const loginForm = document.getElementById('login-form');
     const loginButton = document.getElementById('login-button');
     const errorMessageDiv = document.getElementById('error-message');
+    const firebaseClientReady = Boolean(window.firebaseClientReady);
+    const firebaseClientConfigError = window.firebaseClientConfigError || '';
+
+    function setLoginError(message) {
+        errorMessageDiv.textContent = message;
+        errorMessageDiv.style.display = 'block';
+    }
+
+    if (!firebaseClientReady) {
+        const deploymentMessage = firebaseClientConfigError
+            ? `Firebase client configuration is incomplete. ${firebaseClientConfigError} Add the FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, FIREBASE_MESSAGING_SENDER_ID, and FIREBASE_APP_ID variables in Vercel, then redeploy.`
+            : 'Firebase client configuration is incomplete. Add the required Firebase environment variables in Vercel, then redeploy.';
+        setLoginError(deploymentMessage);
+        loginButton.disabled = true;
+        loginButton.querySelector('span').textContent = 'Configuration Required';
+    }
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!firebaseClientReady) {
+            setLoginError(firebaseClientConfigError || 'Firebase client configuration is incomplete for this deployment.');
+            return;
+        }
         loginButton.disabled = true;
         loginButton.querySelector('span').textContent = 'Authenticating...';
         errorMessageDiv.style.display = 'none';
