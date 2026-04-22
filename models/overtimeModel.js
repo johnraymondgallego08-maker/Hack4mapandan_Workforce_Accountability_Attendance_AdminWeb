@@ -1,8 +1,16 @@
 const { db, admin } = require('../config/firebaseAdmin');
-const overtimeCollection = db.collection('overtime');
+
+function getOvertimeCollection() {
+    if (!db) {
+        throw new Error('Firestore is not initialized.');
+    }
+
+    return db.collection('overtime');
+}
 
 exports.getAll = async () => {
     try {
+        const overtimeCollection = getOvertimeCollection();
         const seenRequests = new Set(); // For de-duplication by Employee + Date
         const allDocs = [];
         
@@ -132,6 +140,7 @@ exports.getAll = async () => {
 
 exports.add = async (data) => {
     try {
+        const overtimeCollection = getOvertimeCollection();
         const now = new Date();
         const payload = {
             ...data,
@@ -159,6 +168,7 @@ exports.add = async (data) => {
 
 exports.approve = async (id, performedBy = {}) => {
     try {
+        const overtimeCollection = getOvertimeCollection();
         // Try to find the document in 'overtime' first, then 'attendance'
         let docRef = overtimeCollection.doc(id);
         let doc = await docRef.get();
@@ -201,6 +211,7 @@ exports.approve = async (id, performedBy = {}) => {
 
 exports.reject = async (id, performedBy = {}) => {
     try {
+        const overtimeCollection = getOvertimeCollection();
         // Try to find the document in 'overtime' first, then 'attendance'
         let docRef = overtimeCollection.doc(id);
         let doc = await docRef.get();

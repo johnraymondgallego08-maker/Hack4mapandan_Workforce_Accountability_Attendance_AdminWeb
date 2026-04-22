@@ -2,8 +2,10 @@ const admin = require('firebase-admin');
 const path = require('path');
 const env = require('./env');
 
-let projectId;
+let projectId = env.firebase.projectId || '';
 let initializationError = null;
+let db = null;
+let firebaseReady = false;
 
 function normalizePrivateKey(value = '') {
   if (!value) return '';
@@ -63,13 +65,13 @@ try {
     databaseURL: `https://${projectId}.firebaseio.com`,
     storageBucket: env.firebase.storageBucket || undefined
   });
+
+  db = admin.firestore();
+  firebaseReady = true;
 } catch (error) {
   initializationError = error;
   console.error('Firebase Admin SDK initialization error:', error.message);
   console.error('Please ensure FIREBASE_SERVICE_ACCOUNT or the split FIREBASE_* credential variables are configured correctly.');
-  throw error;
 }
 
-const db = admin.firestore();
-
-module.exports = { admin, db, projectId, initializationError };
+module.exports = { admin, db, projectId, initializationError, firebaseReady };

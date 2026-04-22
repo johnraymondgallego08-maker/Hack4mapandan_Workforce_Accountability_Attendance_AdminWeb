@@ -7,7 +7,7 @@ const path = require("path");
 const os = require("os");
 require("dotenv").config();
 // Initialize Firebase Admin SDK
-const { admin, db, projectId } = require('./config/firebaseAdmin');
+const { admin, db, projectId, firebaseReady, initializationError } = require('./config/firebaseAdmin');
 const expressLayouts = require("express-ejs-layouts");
 const multer = require("multer");
 const helmet = require("helmet");
@@ -38,6 +38,28 @@ const upload = multer({ storage: storage });
 
 const app = express();
 app.disable('x-powered-by');
+
+function getMissingFirebaseConfig() {
+    const missing = [];
+
+    if (env.firebase.serviceAccount) {
+        try {
+            JSON.parse(env.firebase.serviceAccount);
+        } catch (error) {
+            missing.push('FIREBASE_SERVICE_ACCOUNT (invalid JSON)');
+        }
+
+        return missing;
+    }
+
+    if (!env.firebase.projectId) missing.push('FIREBASE_PROJECT_ID');
+    if (!env.firebase.clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
+    if (!env.firebase.privateKey && !env.firebase.privateKeyBase64 && !env.firebase.googleApplicationCredentials) {
+        missing.push('FIREBASE_PRIVATE_KEY or FIREBASE_PRIVATE_KEY_BASE64');
+    }
+
+    return missing;
+}
 
 if (env.isProduction) {
     app.set('trust proxy', 1);
@@ -113,8 +135,66 @@ app.use(async (req, res, next) => {
         isVercel: env.isVercel,
         realtimeProvider: 'firestore'
     };
+    res.locals.firebaseStatus = {
+        ready: firebaseReady,
+        error: initializationError ? initializationError.message : '',
+        missingConfig: getMissingFirebaseConfig()
+    };
     res.locals.path = req.path;
     next();
+});
+
+app.use((req, res, next) => {
+    if (firebaseReady) {
+        return next();
+    }
+
+    const missingConfig = getMissingFirebaseConfig();
+    const message = initializationError
+        ? initializationError.message
+        : 'Firebase Admin SDK is not configured.';
+    const details = missingConfig.length
+        ? `Missing or invalid environment variables: ${missingConfig.join(', ')}`
+        : 'Check the Firebase Admin credentials configured for this deployment.';
+
+    if (req.accepts('json') && !req.accepts('html')) {
+        return res.status(503).json({
+            error: 'Server configuration error',
+            message,
+            details
+        });
+    }
+
+    return res.status(503).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Server Configuration Required</title>
+            <style>
+                body { font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; margin: 0; padding: 32px; }
+                .card { max-width: 760px; margin: 40px auto; background: #fff; border-radius: 16px; padding: 28px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+                h1 { margin-top: 0; font-size: 28px; }
+                p { line-height: 1.6; }
+                code { background: #eef2ff; padding: 2px 6px; border-radius: 6px; }
+                .hint { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 16px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Firebase Admin configuration is required</h1>
+                <p>${message}</p>
+                <div class="hint">
+                    <p><strong>What to set in Vercel:</strong></p>
+                    <p>${details}</p>
+                    <p>For Vercel, use <code>FIREBASE_SERVICE_ACCOUNT</code> or the split admin credentials:
+                    <code>FIREBASE_PROJECT_ID</code>, <code>FIREBASE_CLIENT_EMAIL</code>, and <code>FIREBASE_PRIVATE_KEY</code>.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 app.post(
@@ -130,7 +210,7 @@ app.use("/", overtimeRoutes);
 
 // --- DATABASE SCANNER & DIAGNOSTICS ---
 app.get('/db-status', authMiddleware.isAuthenticated, adminMiddleware.isAdmin, async (req, res) => {
-    if (admin.apps.length) {
+    if (firebaseReady && admin.apps.length && db) {
         try {
             // Perform a quick scan of key collections
             const [adminCount, empCount, latestLog] = await Promise.all([

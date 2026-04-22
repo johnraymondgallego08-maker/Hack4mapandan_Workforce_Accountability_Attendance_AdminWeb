@@ -1,7 +1,6 @@
 const { db } = require('../config/firebaseAdmin');
 const fs = require('fs');
 const path = require('path');
-const usersCollection = db.collection('employees');
 const EMPLOYEE_IMAGES_DIR = path.join(__dirname, '../public/employee_images');
 const EMPLOYEE_DEFAULT_FIELDS = {
     status: 'Active',
@@ -11,6 +10,14 @@ const EMPLOYEE_DEFAULT_FIELDS = {
     department: '',
     position: ''
 };
+
+function getUsersCollection() {
+    if (!db) {
+        throw new Error('Firestore is not initialized.');
+    }
+
+    return db.collection('employees');
+}
 
 function isEmployeeUser(user) {
     const role = String(user && user.role ? user.role : '').trim().toLowerCase();
@@ -121,6 +128,7 @@ function resolveUserPhoto(id, data = {}, existingPhoto = null) {
 
 exports.getAllUsers = async () => {
     try {
+        const usersCollection = getUsersCollection();
         const snapshot = await usersCollection.get(); // employees
         const usersSnapshot = await db.collection('users').get(); // users
         const adminSnapshot = await db.collection('Admin').get(); // Admin
@@ -182,6 +190,7 @@ exports.getAllUsers = async () => {
 };
 
 exports.getUserById = async (id) => {
+    const usersCollection = getUsersCollection();
     const doc = await usersCollection.doc(id).get();
     let data = doc.exists ? doc.data() : null;
     let source = 'employees';
@@ -236,6 +245,7 @@ exports.getUserById = async (id) => {
 };
 
 exports.updateUser = async (id, data) => {
+    const usersCollection = getUsersCollection();
     // 1. Update employees collection (use set+merge to handle cases where doc might be missing)
     await usersCollection.doc(id).set(data, { merge: true });
 
@@ -256,6 +266,7 @@ exports.updateUser = async (id, data) => {
 };
 
 exports.deleteUser = async (id) => {
+    const usersCollection = getUsersCollection();
     // Attempt to delete from all potential collections to ensure "unknown" or "synced" users are removed
     try {
         await usersCollection.doc(id).delete(); // employees
@@ -282,6 +293,7 @@ exports.deleteUser = async (id) => {
 // This function is useful for checking roles, but not for password auth anymore.
 exports.getUserByEmail = async (email) => {
     if (!email) return null;
+    const usersCollection = getUsersCollection();
     const lowerCaseEmail = email.toLowerCase();
     const snapshot = await usersCollection.where('email', '==', lowerCaseEmail).limit(1).get();
     if (snapshot.empty) {

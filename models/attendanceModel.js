@@ -1,8 +1,16 @@
 const { db } = require('../config/firebaseAdmin');
-const attendanceCollection = db.collection('attendance');
+
+function getAttendanceCollection() {
+    if (!db) {
+        throw new Error('Firestore is not initialized.');
+    }
+
+    return db.collection('attendance');
+}
 
 exports.getAllAttendance = async () => {
     try {
+        const attendanceCollection = getAttendanceCollection();
         // Changed orderBy to 'timestamp' to match your database structure
         const snapshot = await attendanceCollection.orderBy('timestamp', 'desc').get();
         const records = [];
@@ -28,6 +36,7 @@ exports.getAllAttendance = async () => {
 };
 
 exports.addAttendance = async (data) => {
+    const attendanceCollection = getAttendanceCollection();
     // Ensure both date and timestamp are saved for consistency
     const timestamp = new Date();
     const newRecord = {
