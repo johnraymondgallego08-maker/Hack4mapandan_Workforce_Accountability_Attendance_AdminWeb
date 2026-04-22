@@ -11,13 +11,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('[EVENTS] Initializing real-time handler...');
 
-    // Join events room for real-time updates
-    realtime.joinRoom('events');
-    console.log('[EVENTS] Joined events room');
+    const isPublishedStatus = (value) => String(value || '').trim().toLowerCase() === 'public';
+    const normalizeStatus = (value) => isPublishedStatus(value) ? 'Public' : 'Draft';
 
-    const getTableBody = () => {
-        const tables = document.querySelectorAll('table tbody');
-        return tables.length > 0 ? tables[0] : null;
+    const getTableBody = (status) => {
+        const tableId = isPublishedStatus(status) ? 'publishedEventsTableBody' : 'draftEventsTableBody';
+        return document.getElementById(tableId);
+    };
+
+    const getTable = (status) => {
+        const tableId = isPublishedStatus(status) ? 'publishedEventsTable' : 'draftEventsTable';
+        return document.getElementById(tableId);
+    };
+
+    const getEmptyState = (status) => {
+        const emptyStateId = isPublishedStatus(status) ? 'publishedEmptyState' : 'draftEmptyState';
+        return document.getElementById(emptyStateId);
+    };
+
+    const toDateValue = (value) => {
+        if (!value) return null;
+        if (value.toDate && typeof value.toDate === 'function') return value.toDate();
+        if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const formatScheduleLabel = (data) => {
+        const dateValue = toDateValue(data.eventDate || data.publishDate || data.date);
+        const timeValue = String(data.eventTime || '').trim();
+        const parts = [];
+
+        if (dateValue) {
+            parts.push(dateValue.toLocaleDateString('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }));
+        }
+
+        if (timeValue) {
+            parts.push(timeValue);
+        }
+
+        return parts.join(' at ') || '—';
+    };
+
+    const truncateSummary = (value) => {
+        const summary = String(value || '');
+        return summary.length > 80 ? `${summary.substring(0, 77)}...` : summary;
+    };
+
+    const escapeHtml = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const getSafeSelector = (id) => {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return `tr[data-record-id="${window.CSS.escape(id)}"]`;
+        }
+
+        return `tr[data-record-id="${String(id).replace(/"/g, '\\"')}"]`;
+    };
+
+    const updateSectionState = (status) => {
+        const tbody = getTableBody(status);
+        const table = getTable(status);
+        const emptyState = getEmptyState(status);
+        if (!tbody || !table || !emptyState) return;
+
+        const hasRows = tbody.querySelectorAll('tr').length > 0;
+        table.style.display = hasRows ? '' : 'none';
+        emptyState.style.display = hasRows ? 'none' : '';
     };
 
     const showNotification = (message, type = 'info') => {
@@ -28,23 +97,102 @@ document.addEventListener('DOMContentLoaded', () => {
                 icon: type,
                 timer: 3000,
                 position: 'top-end',
-                showConfirmButton: false,
+                showConfirmButton: false
             });
         } else {
             console.log(`[${type.toUpperCase()}] ${message}`);
         }
     };
 
-    // Handle form submission via AJAX to keep connection alive
+    const buildRowMarkup = (data, csrfToken) => {
+        const normalizedStatus = normalizeStatus(data.status);
+        const dateValue = toDateValue(data.eventDate || data.publishDate || data.date);
+        const timestamp = dateValue ? dateValue.getTime() : 0;
+        const safeId = encodeURIComponent(data.id);
+
+        return `
+            <tr data-record-id="${escapeHtml(data.id)}" data-record-status="${escapeHtml(normalizedStatus)}" data-title="${escapeHtml(data.title || '')}" data-date="${timestamp}">
+                <td style="padding:0.5rem; vertical-align:middle;">
+                    <strong>${escapeHtml(data.title || 'Untitled')}</strong><br>
+                    <small style="color:var(--text-muted);">${escapeHtml(truncateSummary(data.summary))}</small>
+                </td>
+                <td style="padding:0.5rem; text-align:center;">${escapeHtml(data.type || 'announcement')}</td>
+                <td style="padding:0.5rem; text-align:center;">${escapeHtml(data.scheduleLabel || formatScheduleLabel(data))}</td>
+                <td style="padding:0.5rem; text-align:center;">${escapeHtml(normalizedStatus)}</td>
+                <td style="padding:0.5rem; text-align:center;">
+                    <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap;">
+                        <a href="/manage-events/edit/${safeId}" class="btn-action" title="Edit" aria-label="Edit" style="margin:0;">
+                            <i data-lucide="edit"></i>
+                        </a>
+                        <form action="/manage-events/delete/${safeId}" method="POST" style="display:inline-block; margin:0;">
+                            <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+                            <button type="submit" class="btn-action btn-delete" title="Delete" aria-label="Delete" style="margin:0;">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+        `;
+    };
+
+    const upsertRow = (data) => {
+        if (!data || !data.id) return;
+
+        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
+        const normalizedStatus = normalizeStatus(data.status);
+        const targetBody = getTableBody(normalizedStatus);
+        if (!targetBody) {
+            console.warn('[EVENTS] No target table body found for status:', normalizedStatus);
+            return;
+        }
+
+        const existingRow = document.querySelector(getSafeSelector(data.id));
+        const wrapper = document.createElement('tbody');
+        wrapper.innerHTML = buildRowMarkup({ ...data, status: normalizedStatus }, csrfToken).trim();
+        const newRow = wrapper.firstElementChild;
+
+        if (!newRow) return;
+
+        if (existingRow) {
+            existingRow.replaceWith(newRow);
+        } else {
+            targetBody.insertBefore(newRow, targetBody.firstChild);
+        }
+
+        if (newRow.parentElement !== targetBody) {
+            targetBody.insertBefore(newRow, targetBody.firstChild);
+        }
+
+        updateSectionState('Public');
+        updateSectionState('Draft');
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    };
+
+    const removeRow = (id) => {
+        if (!id) return;
+        const row = document.querySelector(getSafeSelector(id));
+        if (row) {
+            row.remove();
+        }
+
+        updateSectionState('Public');
+        updateSectionState('Draft');
+    };
+
+    realtime.joinRoom('events');
+    console.log('[EVENTS] Joined events room');
+
     const createForm = document.querySelector('form[action="/manage-events/create"]');
     if (createForm) {
         createForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             console.log('[EVENTS] Form submitted - requiring confirmation');
 
-            // Show confirmation dialog
             if (typeof Swal === 'undefined') {
-                // Fallback if SweetAlert not available
                 if (confirm('Create this event or announcement?')) {
                     submitEventForm();
                 }
@@ -66,14 +214,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             async function submitEventForm() {
                 const formData = new FormData(createForm);
-                
+
                 try {
                     const response = await fetch('/manage-events/create', {
                         method: 'POST',
                         body: formData,
                         credentials: 'same-origin',
                         headers: {
-                            'Accept': 'application/json'
+                            Accept: 'application/json'
                         }
                     });
 
@@ -81,11 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log('[EVENTS] Event created successfully');
                         showNotification('Event created successfully!', 'success');
                         createForm.reset();
-                        // Firestore listeners will update the table in real-time
+                        const preview = document.getElementById('coverPreview');
+                        if (preview) preview.style.display = 'none';
                     } else {
-                        const text = await response.text();
-                        console.error('[EVENTS] Error:', text);
-                        showNotification('Failed to create event', 'error');
+                        const payload = await response.json().catch(() => null);
+                        console.error('[EVENTS] Error:', payload);
+                        showNotification(payload?.error || 'Failed to create event', 'error');
                     }
                 } catch (error) {
                     console.error('[EVENTS] Request error:', error);
@@ -95,96 +244,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Handle new event created
     realtime.on('event-created', (data) => {
         console.log('[EVENTS] Real-time update - new event created:', data);
-        
-        // Remove any optimistic ghost rows
-        const optRow = document.querySelector('[id^="opt-"]');
-        if (optRow) optRow.remove();
-
-        const tbody = getTableBody();
-        if (!tbody) {
-            console.warn('[EVENTS] No table body found');
-            return;
-        }
-
-        // Fix: Retrieve the CSRF token from the existing form to ensure 
-        // the delete button works on rows added via real-time.
-        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td style="padding:0.5rem; vertical-align:middle;"><strong>${data.title || 'Untitled'}</strong><br><small style="color:var(--text-muted);">${(data.summary || '').substring(0, 77)}</small></td>
-            <td style="padding:0.5rem; text-align:center;">${data.type || 'announcement'}</td>
-            <td style="padding:0.5rem; text-align:center;">${data.scheduleLabel || '—'}</td>
-            <td style="padding:0.5rem; text-align:center;">${data.status || 'Public'}</td>
-            <td style="padding:0.5rem; text-align:center;">
-                <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center;">
-                    <a href="/manage-events/edit/${data.id}" class="btn-action" title="Edit"><i data-lucide="edit"></i></a>
-                    <form action="/manage-events/delete/${data.id}" method="POST" style="display:inline-block; margin:0;">
-                        <input type="hidden" name="_csrf" value="${csrfToken}">
-                        <button type="submit" class="btn-action btn-delete" title="Delete"><i data-lucide="trash-2"></i></button>
-                    </form>
-                </div>
-            </td>
-        `;
-
-        // Add to top of table
-        if (tbody.firstChild) {
-            tbody.insertBefore(row, tbody.firstChild);
-        } else {
-            tbody.appendChild(row);
-        }
-
-        // Reinitialize icons
-        if (typeof lucide !== 'undefined' && lucide.createIcons) {
-            lucide.createIcons();
-        }
-
-        console.log('[EVENTS] Row added to table');
+        upsertRow(data);
+        console.log('[EVENTS] Row added to matching table');
         showNotification('New event appeared!', 'success');
     });
 
-    // Handle event updated
     realtime.on('event-updated', (data) => {
         console.log('[EVENTS] Real-time update - event updated:', data);
-        
-        const rows = document.querySelectorAll('table tbody tr');
-        rows.forEach((row) => {
-            const editLink = row.querySelector('a[href*="/manage-events/edit/"]');
-            if (editLink && editLink.href.includes(data.id)) {
-                row.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
-                setTimeout(() => {
-                    row.style.backgroundColor = '';
-                }, 2000);
-                
-                showNotification('Event updated by another user', 'info');
-            }
-        });
+        upsertRow(data);
+
+        const row = document.querySelector(getSafeSelector(data.id));
+        if (row) {
+            row.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => {
+                row.style.backgroundColor = '';
+            }, 2000);
+        }
+
+        showNotification('Event updated by another user', 'info');
     });
 
-    // Handle event deleted
     realtime.on('event-deleted', (data) => {
         console.log('[EVENTS] Real-time update - event deleted:', data);
-        
-        const rows = document.querySelectorAll('table tbody tr');
-        rows.forEach((row) => {
-            const editLink = row.querySelector('a[href*="/manage-events/edit/"]');
-            if (editLink && editLink.href.includes(data.id)) {
-                row.style.opacity = '0.5';
-                setTimeout(() => {
-                    row.remove();
-                }, 500);
-                
-                showNotification('Event deleted by another user', 'info');
-            }
-        });
+
+        const row = document.querySelector(getSafeSelector(data.id));
+        if (row) {
+            row.style.opacity = '0.5';
+            setTimeout(() => {
+                removeRow(data.id);
+            }, 500);
+        } else {
+            removeRow(data.id);
+        }
+
+        showNotification('Event deleted by another user', 'info');
     });
 
     console.log('[EVENTS] Real-time listeners initialized');
 
-    // Handle edit form submission (on edit-event.ejs page)
     const editForm = document.querySelector('form[action*="/manage-events/edit/"]');
     if (editForm) {
         editForm.addEventListener('submit', async (e) => {
@@ -213,29 +312,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             async function submitEditForm() {
                 const formData = new FormData(editForm);
-                const eventId = editForm.action.split('/').pop();
-                
+
                 try {
                     const response = await fetch(editForm.action, {
                         method: 'POST',
                         body: formData,
                         credentials: 'same-origin',
                         headers: {
-                            'Accept': 'application/json'
+                            Accept: 'application/json'
                         }
                     });
 
                     if (response.ok) {
                         console.log('[EVENTS] Event updated successfully');
                         showNotification('Event updated successfully!', 'success');
-                        // Return to manage-events after brief delay
                         setTimeout(() => {
                             window.location.href = '/manage-events';
                         }, 1500);
                     } else {
-                        const text = await response.text();
-                        console.error('[EVENTS] Update error:', text);
-                        showNotification('Failed to update event', 'error');
+                        const payload = await response.json().catch(() => null);
+                        console.error('[EVENTS] Update error:', payload);
+                        showNotification(payload?.error || 'Failed to update event', 'error');
                     }
                 } catch (error) {
                     console.error('[EVENTS] Request error:', error);
@@ -245,13 +342,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Handle delete form submission (inline forms in manage-events.ejs table)
-    // Note: These forms are added dynamically, so we use event delegation
     document.addEventListener('submit', (e) => {
         const form = e.target;
-        
-        // Check if this is a delete form
-        if (!form.action.includes('/manage-events/delete/')) {
+        if (!form.action || !form.action.includes('/manage-events/delete/')) {
             return;
         }
 
@@ -281,30 +374,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async function submitDeleteForm() {
             const formData = new FormData(form);
-            
+
             try {
                 const response = await fetch(form.action, {
                     method: 'POST',
                     body: formData,
                     credentials: 'same-origin',
                     headers: {
-                        'Accept': 'application/json'
+                        Accept: 'application/json'
                     }
                 });
 
                 if (response.ok) {
                     console.log('[EVENTS] Event deleted successfully');
                     showNotification('Event deleted successfully!', 'success');
-                    // Don't reload - let the realtime listeners handle the table update
                 } else {
-                    const text = await response.text();
-                    console.error('[EVENTS] Delete error:', text);
-                    showNotification('Failed to delete event', 'error');
+                    const payload = await response.json().catch(() => null);
+                    console.error('[EVENTS] Delete error:', payload);
+                    showNotification(payload?.error || 'Failed to delete event', 'error');
                 }
             } catch (error) {
                 console.error('[EVENTS] Request error:', error);
                 showNotification('Network error', 'error');
             }
         }
-    }, true); // Use capture phase for event delegation on dynamically added forms
+    }, true);
+
+    updateSectionState('Public');
+    updateSectionState('Draft');
 });

@@ -11,6 +11,10 @@ function normalizeStatus(value) {
     return 'Public';
 }
 
+function isPublishedStatus(value) {
+    return normalizeStatus(value) === 'Public';
+}
+
 function toValidDate(value) {
     if (!value) return null;
     if (value.toDate && typeof value.toDate === 'function') {
@@ -65,6 +69,17 @@ function toInputDate(value) {
     return `${year}-${month}-${day}`;
 }
 
+function mapEventRecord(record = {}) {
+    return {
+        ...record,
+        status: normalizeStatus(record.status),
+        isPublished: isPublishedStatus(record.status),
+        createdAtLabel: formatDateTime(record.createdAt || record.updatedAt),
+        scheduleLabel: formatScheduleLabel(record),
+        eventDateInput: toInputDate(record.eventDate)
+    };
+}
+
 async function ensureCollectionReady() {
     const bootstrapRef = db.collection(COLLECTION_NAME).doc(BOOTSTRAP_DOC_ID);
     const bootstrapSnap = await bootstrapRef.get();
@@ -95,13 +110,7 @@ exports.getAll = async () => {
         return snapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
             .filter((record) => !record.system && record.id !== BOOTSTRAP_DOC_ID)
-            .map((record) => ({
-                ...record,
-                status: normalizeStatus(record.status),
-                createdAtLabel: formatDateTime(record.createdAt || record.updatedAt),
-                scheduleLabel: formatScheduleLabel(record),
-                eventDateInput: toInputDate(record.eventDate)
-            }))
+            .map((record) => mapEventRecord(record))
             .sort((a, b) => {
                 const aDate = toValidDate(a.eventDate || a.publishDate || a.createdAt) || 0;
                 const bDate = toValidDate(b.eventDate || b.publishDate || b.createdAt) || 0;
@@ -115,6 +124,7 @@ exports.getAll = async () => {
 
 exports.create = async (data = {}) => {
     await ensureCollectionReady();
+    const normalizedStatus = normalizeStatus(data.status);
     const payload = {
         type: data.type || 'announcement',
         title: data.title || '',
@@ -123,7 +133,7 @@ exports.create = async (data = {}) => {
         eventDate: toFirestoreTimestamp(data.eventDate) || null,
         eventTime: data.eventTime || '',
         location: data.location || '',
-        status: normalizeStatus(data.status),
+        status: normalizedStatus,
         imageUrl: data.imageUrl || null,
         imagePath: data.imagePath || null,
         imageStorage: data.imageStorage || null,
@@ -131,8 +141,12 @@ exports.create = async (data = {}) => {
         updatedAt: admin.firestore.Timestamp.now()
     };
 
+    if (isPublishedStatus(normalizedStatus)) {
+        payload.publishedAt = admin.firestore.Timestamp.now();
+    }
+
     const docRef = await db.collection(COLLECTION_NAME).add(payload);
-    return { id: docRef.id, ...payload };
+    return mapEventRecord({ id: docRef.id, ...payload });
 };
 
 exports.getById = async (id) => {
@@ -144,19 +158,16 @@ exports.getById = async (id) => {
     const data = doc.data() || {};
     if (data.system) return null;
 
-    return {
+    return mapEventRecord({
         id: doc.id,
-        ...data,
-        status: normalizeStatus(data.status),
-        createdAtLabel: formatDateTime(data.createdAt || data.updatedAt),
-        scheduleLabel: formatScheduleLabel(data),
-        eventDateInput: toInputDate(data.eventDate)
-    };
+        ...data
+    });
 };
 
 exports.update = async (id, data = {}) => {
     if (!id || id === BOOTSTRAP_DOC_ID) return false;
 
+    const normalizedStatus = normalizeStatus(data.status);
     const payload = {
         type: data.type || 'announcement',
         title: data.title || '',
@@ -165,12 +176,22 @@ exports.update = async (id, data = {}) => {
         eventDate: toFirestoreTimestamp(data.eventDate) || null,
         eventTime: data.eventTime || '',
         location: data.location || '',
-        status: normalizeStatus(data.status),
-        imageUrl: data.imageUrl || null,
-        imagePath: data.imagePath || null,
-        imageStorage: data.imageStorage || null,
+        status: normalizedStatus,
         updatedAt: admin.firestore.Timestamp.now()
     };
+
+    if (Object.prototype.hasOwnProperty.call(data, 'imageUrl')) {
+        payload.imageUrl = data.imageUrl || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'imagePath')) {
+        payload.imagePath = data.imagePath || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'imageStorage')) {
+        payload.imageStorage = data.imageStorage || null;
+    }
+    if (isPublishedStatus(normalizedStatus)) {
+        payload.publishedAt = toFirestoreTimestamp(data.publishedAt) || admin.firestore.Timestamp.now();
+    }
 
     await db.collection(COLLECTION_NAME).doc(id).set(payload, { merge: true });
     return true;
@@ -186,10 +207,14 @@ exports.delete = async (id) => {
 exports.toggleStatus = async (id, nextStatus) => {
     if (!id || id === BOOTSTRAP_DOC_ID) return false;
 
+    const normalizedStatus = normalizeStatus(nextStatus);
     await db.collection(COLLECTION_NAME).doc(id).set({
-        status: normalizeStatus(nextStatus),
-        updatedAt: new Date()
+        status: normalizedStatus,
+        ...(isPublishedStatus(normalizedStatus) ? { publishedAt: admin.firestore.Timestamp.now() } : {}),
+        updatedAt: admin.firestore.Timestamp.now()
     }, { merge: true });
 
     return true;
 };
+
+exports.isPublishedStatus = isPublishedStatus;

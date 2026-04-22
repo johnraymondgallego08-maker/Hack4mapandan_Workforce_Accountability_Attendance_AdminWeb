@@ -21,14 +21,38 @@ function parseDateInput(v) {
     return d;
 }
 
+function wantsJson(req) {
+    return req.xhr || req.headers?.accept?.includes('application/json');
+}
+
+function respondError(req, res, redirectPath, message, statusCode = 400) {
+    if (wantsJson(req)) {
+        return res.status(statusCode).json({ success: false, error: message });
+    }
+
+    req.flash('error', message);
+    return res.redirect(redirectPath);
+}
+
+function respondSuccess(req, res, redirectPath, message, payload = {}) {
+    if (wantsJson(req)) {
+        return res.status(200).json({ success: true, message, ...payload });
+    }
+
+    req.flash('success', message);
+    return res.redirect(redirectPath);
+}
+
 exports.manageEvents = async (req, res) => {
     try {
         const records = await eventAnnouncementModel.getAll();
-        res.render('manage-events', { records });
+        const publishedRecords = records.filter((record) => eventAnnouncementModel.isPublishedStatus(record.status));
+        const draftRecords = records.filter((record) => !eventAnnouncementModel.isPublishedStatus(record.status));
+        res.render('manage-events', { records, publishedRecords, draftRecords });
     } catch (err) {
         console.error('Error loading manage events:', err);
         req.flash('error', 'Failed to load records');
-        res.render('manage-events', { records: [] });
+        res.render('manage-events', { records: [], publishedRecords: [], draftRecords: [] });
     }
 };
 
@@ -44,8 +68,7 @@ exports.createEvent = async (req, res) => {
         const status = String(req.body.status || 'Public').trim();
 
         if (!title) {
-            req.flash('error', 'Title is required');
-            return res.redirect('/manage-events');
+            return respondError(req, res, '/manage-events', 'Title is required');
         }
 
         const data = { type, title, summary, content, eventDate, eventTime, location, status };
@@ -56,8 +79,7 @@ exports.createEvent = async (req, res) => {
                 const mimetype = String(req.file.mimetype || '').toLowerCase();
                 if (!allowed.includes(mimetype)) {
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    req.flash('error', 'Invalid file type.');
-                    return res.redirect('/manage-events');
+                    return respondError(req, res, '/manage-events', 'Invalid file type.');
                 }
 
                 const extension = path.extname(req.file.originalname || req.file.filename || '') || '.jpg';
@@ -76,24 +98,20 @@ exports.createEvent = async (req, res) => {
                 } catch (err) {
                     console.error('[EVENT] Supabase upload failed:', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    req.flash('error', 'Failed to upload image to storage. Please ensure Supabase is configured properly.');
-                    return res.redirect('/manage-events');
+                    return respondError(req, res, '/manage-events', 'Failed to upload image to storage. Please ensure Supabase is configured properly.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
                 try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
-                req.flash('error', 'Failed to save uploaded image');
-                return res.redirect('/manage-events');
+                return respondError(req, res, '/manage-events', 'Failed to save uploaded image', 500);
             }
         }
 
-        await eventAnnouncementModel.create(data);
-        req.flash('success', 'Event created');
-        res.redirect('/manage-events');
+        const createdRecord = await eventAnnouncementModel.create(data);
+        return respondSuccess(req, res, '/manage-events', 'Event created', { record: createdRecord });
     } catch (err) {
         console.error('Error creating event:', err);
-        req.flash('error', 'Unexpected error creating event');
-        res.redirect('/manage-events');
+        return respondError(req, res, '/manage-events', 'Unexpected error creating event', 500);
     }
 };
 
@@ -118,8 +136,7 @@ exports.updateEvent = async (req, res) => {
         const id = req.params.id;
         const existing = await eventAnnouncementModel.getById(id);
         if (!existing) {
-            req.flash('error', 'Event not found');
-            return res.redirect('/manage-events');
+            return respondError(req, res, '/manage-events', 'Event not found', 404);
         }
 
         const type = String(req.body.type || existing.type || 'announcement').trim();
@@ -132,8 +149,7 @@ exports.updateEvent = async (req, res) => {
         const status = String(typeof req.body.status === 'undefined' ? existing.status : req.body.status).trim();
 
         if (!title) {
-            req.flash('error', 'Title is required');
-            return res.redirect(`/manage-events/edit/${id}`);
+            return respondError(req, res, `/manage-events/edit/${id}`, 'Title is required');
         }
 
         const updateData = { type, title, summary, content, eventDate, eventTime, location, status };
@@ -144,8 +160,7 @@ exports.updateEvent = async (req, res) => {
                 const mimetype = String(req.file.mimetype || '').toLowerCase();
                 if (!allowed.includes(mimetype)) {
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    req.flash('error', 'Invalid file type.');
-                    return res.redirect(`/manage-events/edit/${id}`);
+                    return respondError(req, res, `/manage-events/edit/${id}`, 'Invalid file type.');
                 }
 
                 const extension = path.extname(req.file.originalname || req.file.filename || '') || '.jpg';
@@ -172,24 +187,25 @@ exports.updateEvent = async (req, res) => {
                 } catch (err) {
                     console.error('[EVENT] Supabase upload failed (update):', err.message);
                     try { await fsp.unlink(req.file.path); } catch (e) {}
-                    req.flash('error', 'Failed to upload image to storage. Please ensure Supabase is configured properly.');
-                    return res.redirect(`/manage-events/edit/${id}`);
+                    return respondError(req, res, `/manage-events/edit/${id}`, 'Failed to upload image to storage. Please ensure Supabase is configured properly.', 500);
                 }
             } catch (e) {
                 console.error('Failed to process uploaded image:', e);
                 try { if (req.file && req.file.path) await fsp.unlink(req.file.path); } catch (e) {}
-                req.flash('error', 'Failed to process uploaded image.');
-                return res.redirect(`/manage-events/edit/${id}`);
+                return respondError(req, res, `/manage-events/edit/${id}`, 'Failed to process uploaded image.', 500);
             }
         }
 
+        if (eventAnnouncementModel.isPublishedStatus(status) && existing.publishedAt) {
+            updateData.publishedAt = existing.publishedAt;
+        }
+
         await eventAnnouncementModel.update(id, updateData);
-        req.flash('success', 'Event updated');
-        res.redirect('/manage-events');
+        const updatedRecord = await eventAnnouncementModel.getById(id);
+        return respondSuccess(req, res, '/manage-events', 'Event updated', { record: updatedRecord });
     } catch (err) {
         console.error('Error updating event:', err);
-        req.flash('error', 'Unexpected error updating event');
-        res.redirect(`/manage-events/edit/${req.params.id}`);
+        return respondError(req, res, `/manage-events/edit/${req.params.id}`, 'Unexpected error updating event', 500);
     }
 };
 
@@ -198,8 +214,7 @@ exports.deleteEvent = async (req, res) => {
         const id = req.params.id;
         const record = await eventAnnouncementModel.getById(id);
         if (!record) {
-            req.flash('error', 'Record not found');
-            return res.redirect('/manage-events');
+            return respondError(req, res, '/manage-events', 'Record not found', 404);
         }
 
         await eventAnnouncementModel.delete(id);
@@ -213,11 +228,9 @@ exports.deleteEvent = async (req, res) => {
             } catch (e) { console.error('Failed to remove image after delete:', e); }
         }
 
-        req.flash('success', 'Record deleted successfully.');
-        res.redirect('/manage-events');
+        return respondSuccess(req, res, '/manage-events', 'Record deleted successfully.', { id });
     } catch (err) {
         console.error('Error deleting event or announcement:', err);
-        req.flash('error', 'Failed to delete the record.');
-        res.redirect('/manage-events');
+        return respondError(req, res, '/manage-events', 'Failed to delete the record.', 500);
     }
 };

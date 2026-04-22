@@ -2,7 +2,7 @@
     <div class="page-header" style="margin-bottom: 1.25rem; display:flex; justify-content:space-between; align-items:center;">
         <div>
             <h1>Manage Events & Announcements</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Create, edit, publish, or remove events and announcements. New records are saved to Firebase Firestore.</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Create, publish, and organize event records stored in Firestore.</p>
         </div>
     </div>
 
@@ -11,6 +11,7 @@
             <h3 style="margin-top:0; margin-bottom:0.75rem;">Create New</h3>
             <form id="createEventForm" action="/manage-events/create" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
                     <div>
                         <label for="type" style="display:block; font-weight:700; margin-bottom:0.25rem;">Type</label>
@@ -65,115 +66,107 @@
             </form>
         </div>
 
-        <div class="card" style="padding:1rem;">
-            <h3 style="margin-top:0; margin-bottom:0.75rem;">Published Records</h3>
-
-            <% if (!Array.isArray(records) || records.length === 0) { %>
-                <p style="color:var(--text-muted);">No events or announcements yet.</p>
-            <% } else { %>
-                <div style="width:100%; overflow-x:visible;">
-                <table id="eventsTable" style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; padding:0.5rem; cursor:pointer; user-select:none; background:rgba(0,0,0,0.02);" onclick="sortTable('title', this)" title="Click to sort">
-                                <div style="display:flex; align-items:center; justify-content:space-between;">
-                                    <span>Title</span>
-                                    <i class="sort-icon" data-lucide="arrow-up-down" style="width:14px; height:14px; margin-left:0.5rem; opacity:0.5;"></i>
-                                </div>
-                            </th>
-                            <th style="padding:0.5rem; text-align:center;">Type</th>
-                            <th style="text-align:center; padding:0.5rem; cursor:pointer; user-select:none; background:rgba(0,0,0,0.02);" onclick="sortTable('date', this)" title="Click to sort">
-                                <div style="display:flex; align-items:center; justify-content:center;">
-                                    <span>Schedule</span>
-                                    <i class="sort-icon" data-lucide="arrow-up-down" style="width:14px; height:14px; margin-left:0.5rem; opacity:0.5;"></i>
-                                </div>
-                            </th>
-                            <th style="padding:0.5rem; text-align:center;">Status</th>
-                            <th style="padding:0.5rem; text-align:center;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% records.forEach(function(record) { %>
-                            <tr data-title="<%= record.title %>" data-date="<%= record.eventDate ? new Date(record.eventDate.toDate ? record.eventDate.toDate() : record.eventDate).getTime() : 0 %>">
-                                <td style="padding:0.5rem; vertical-align:middle;"><strong><%= record.title %></strong><br><small style="color:var(--text-muted);"><%= record.summary ? (record.summary.length > 80 ? (record.summary.substring(0,77)+'...') : record.summary) : '' %></small></td>
-                                <td style="padding:0.5rem; text-align:center;"><%= record.type %></td>
-                                <td style="padding:0.5rem; text-align:center;"><%= record.scheduleLabel || '—' %></td>
-                                <td style="padding:0.5rem; text-align:center;"><%= record.status %></td>
-                                <td style="padding:0.5rem; text-align:center;">
-                                    <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap;">
-                                        <a href="/manage-events/edit/<%= record.id %>" class="btn-action" title="Edit" aria-label="Edit" style="margin:0;">
-                                            <i data-lucide="edit"></i>
-                                        </a>
-
-                                        <form action="/manage-events/delete/<%= record.id %>" method="POST" style="display:inline-block; margin:0;" onsubmit="confirmDelete(this, 'Delete record', 'This will permanently remove the record.')">
-                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                                            <button type="submit" class="btn-action btn-delete" title="Delete" aria-label="Delete" style="margin:0;">
-                                                <i data-lucide="trash-2"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                </td>
+        <div style="display:grid; gap:1rem;">
+            <div class="card" style="padding:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+                    <h3 style="margin:0;">Published Records</h3>
+                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= Array.isArray(publishedRecords) ? publishedRecords.length : 0 %> record(s)</span>
+                </div>
+                <div id="publishedEmptyState" style="<%= Array.isArray(publishedRecords) && publishedRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
+                    No published events or announcements yet.
+                </div>
+                <div style="width:100%; overflow-x:auto;">
+                    <table id="publishedEventsTable" style="width:100%; border-collapse:collapse; <%= Array.isArray(publishedRecords) && publishedRecords.length ? '' : 'display:none;' %>">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; padding:0.5rem;">Title</th>
+                                <th style="padding:0.5rem; text-align:center;">Type</th>
+                                <th style="text-align:center; padding:0.5rem;">Schedule</th>
+                                <th style="padding:0.5rem; text-align:center;">Status</th>
+                                <th style="padding:0.5rem; text-align:center;">Actions</th>
                             </tr>
-                        <% }); %>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody id="publishedEventsTableBody">
+                            <% (publishedRecords || []).forEach(function(record) { %>
+                                <tr data-record-id="<%= record.id %>" data-record-status="<%= record.status %>" data-title="<%= record.title %>" data-date="<%= record.eventDate ? new Date(record.eventDate.toDate ? record.eventDate.toDate() : record.eventDate).getTime() : 0 %>">
+                                    <td style="padding:0.5rem; vertical-align:middle;">
+                                        <strong><%= record.title %></strong><br>
+                                        <small style="color:var(--text-muted);"><%= record.summary ? (record.summary.length > 80 ? (record.summary.substring(0,77)+'...') : record.summary) : '' %></small>
+                                    </td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.type %></td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.scheduleLabel || '—' %></td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.status %></td>
+                                    <td style="padding:0.5rem; text-align:center;">
+                                        <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap;">
+                                            <a href="/manage-events/edit/<%= record.id %>" class="btn-action" title="Edit" aria-label="Edit" style="margin:0;">
+                                                <i data-lucide="edit"></i>
+                                            </a>
+                                            <form action="/manage-events/delete/<%= record.id %>" method="POST" style="display:inline-block; margin:0;">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <button type="submit" class="btn-action btn-delete" title="Delete" aria-label="Delete" style="margin:0;">
+                                                    <i data-lucide="trash-2"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
                 </div>
-                
-                <!-- Pagination Controls -->
-                <div id="paginationControls" style="display:flex; justify-content:center; align-items:center; gap:0.5rem; margin-top:1.25rem; flex-wrap:wrap;">
-                    <button id="prevPage" class="btn" style="padding:0.4rem 0.8rem; font-size:0.9rem;" onclick="previousPage()">
-                        <i data-lucide="chevron-left" style="width:16px; height:16px; display:inline;"></i> Previous
-                    </button>
-                    <span id="pageInfo" style="margin:0 0.5rem; font-size:0.9rem; min-width:120px; text-align:center;">Page 1 of 1</span>
-                    <button id="nextPage" class="btn" style="padding:0.4rem 0.8rem; font-size:0.9rem;" onclick="nextPage()">
-                        Next <i data-lucide="chevron-right" style="width:16px; height:16px; display:inline;"></i>
-                    </button>
+            </div>
+
+            <div class="card" style="padding:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+                    <h3 style="margin:0;">Draft Records</h3>
+                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= Array.isArray(draftRecords) ? draftRecords.length : 0 %> record(s)</span>
                 </div>
-            <% } %>
+                <div id="draftEmptyState" style="<%= Array.isArray(draftRecords) && draftRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
+                    No draft records waiting for publication.
+                </div>
+                <div style="width:100%; overflow-x:auto;">
+                    <table id="draftEventsTable" style="width:100%; border-collapse:collapse; <%= Array.isArray(draftRecords) && draftRecords.length ? '' : 'display:none;' %>">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; padding:0.5rem;">Title</th>
+                                <th style="padding:0.5rem; text-align:center;">Type</th>
+                                <th style="text-align:center; padding:0.5rem;">Schedule</th>
+                                <th style="padding:0.5rem; text-align:center;">Status</th>
+                                <th style="padding:0.5rem; text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="draftEventsTableBody">
+                            <% (draftRecords || []).forEach(function(record) { %>
+                                <tr data-record-id="<%= record.id %>" data-record-status="<%= record.status %>" data-title="<%= record.title %>" data-date="<%= record.eventDate ? new Date(record.eventDate.toDate ? record.eventDate.toDate() : record.eventDate).getTime() : 0 %>">
+                                    <td style="padding:0.5rem; vertical-align:middle;">
+                                        <strong><%= record.title %></strong><br>
+                                        <small style="color:var(--text-muted);"><%= record.summary ? (record.summary.length > 80 ? (record.summary.substring(0,77)+'...') : record.summary) : '' %></small>
+                                    </td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.type %></td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.scheduleLabel || '—' %></td>
+                                    <td style="padding:0.5rem; text-align:center;"><%= record.status %></td>
+                                    <td style="padding:0.5rem; text-align:center;">
+                                        <div style="display:flex; gap:0.35rem; flex-wrap:nowrap; justify-content:center; align-items:center; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap;">
+                                            <a href="/manage-events/edit/<%= record.id %>" class="btn-action" title="Edit" aria-label="Edit" style="margin:0;">
+                                                <i data-lucide="edit"></i>
+                                            </a>
+                                            <form action="/manage-events/delete/<%= record.id %>" method="POST" style="display:inline-block; margin:0;">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                                                <button type="submit" class="btn-action btn-delete" title="Delete" aria-label="Delete" style="margin:0;">
+                                                    <i data-lucide="trash-2"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
-<style>
-    #prevPage:disabled, #nextPage:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    #paginationControls {
-        border-top: 1px solid var(--border-glass);
-        padding-top: 1rem;
-    }
-
-    /* Sortable table header styles */
-    table thead th[onclick] {
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        user-select: none;
-    }
-
-    table thead th[onclick]:hover {
-        background-color: rgba(0, 0, 0, 0.06) !important;
-    }
-
-    table thead th[onclick]:active {
-        background-color: rgba(0, 0, 0, 0.08) !important;
-    }
-
-    .sort-icon {
-        transition: opacity 0.2s ease, transform 0.2s ease;
-        display: inline-block;
-    }
-
-    table thead th[onclick] .sort-icon {
-        opacity: 0.5;
-    }
-
-    table thead th[onclick]:hover .sort-icon {
-        opacity: 0.7;
-    }
-</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -183,6 +176,7 @@
     function previewCover(input, previewId) {
         const previewContainer = document.getElementById(previewId);
         if (!previewContainer) return;
+
         const img = previewContainer.querySelector('img');
         const file = input.files && input.files[0];
         if (!file) {
@@ -198,187 +192,6 @@
         };
         reader.readAsDataURL(file);
     }
-
-    function confirmCreate(form, title = 'Create', text = 'Create this record?') {
-        if (event) event.preventDefault();
-        if (typeof Swal === 'undefined') return form.submit();
-        Swal.fire({
-            ...buildSwalOptions({ title, text, icon: 'question', confirmButtonText: 'Create', accent: 'primary' })
-        }).then((result) => {
-            if (result.isConfirmed) form.submit();
-        });
-    }
-
-    // Pagination & Sorting Variables
-    let currentPage = 1;
-    const itemsPerPage = 10;
-    let totalRows = 0;
-    let sortColumn = 'none';
-    let sortDirection = 'asc';
-    let sortedRows = [];
-
-    function sortTable(column, headerElement) {
-        const table = document.getElementById('eventsTable');
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-        // Toggle direction if same column, otherwise reset to ascending
-        if (sortColumn === column) {
-            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            sortDirection = 'asc';
-            // Remove highlight from other headers
-            table.querySelectorAll('thead th').forEach(th => {
-                const icon = th.querySelector('.sort-icon');
-                if (icon) {
-                    icon.style.opacity = '0.5';
-                    icon.setAttribute('data-lucide', 'arrow-up-down');
-                }
-            });
-        }
-
-        sortColumn = column;
-
-        // Sort the rows
-        rows.sort((a, b) => {
-            let aVal, bVal;
-
-            if (column === 'title') {
-                aVal = a.getAttribute('data-title').toLowerCase();
-                bVal = b.getAttribute('data-title').toLowerCase();
-            } else if (column === 'date') {
-                aVal = parseInt(a.getAttribute('data-date')) || 0;
-                bVal = parseInt(b.getAttribute('data-date')) || 0;
-            }
-
-            if (sortDirection === 'asc') {
-                return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-            } else {
-                return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
-            }
-        });
-
-        // Reorder rows in tbody
-        rows.forEach(row => tbody.appendChild(row));
-
-        // Update sort icon
-        if (headerElement) {
-            const icon = headerElement.querySelector('.sort-icon');
-            if (icon) {
-                icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'arrow-up' : 'arrow-down');
-                icon.style.opacity = '1';
-                if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                    lucide.createIcons();
-                }
-            }
-        }
-
-        // Reset to page 1 after sorting and refresh display
-        currentPage = 1;
-        totalRows = rows.length;
-        displayPage(1);
-    }
-
-    function initializePagination() {
-        const table = document.getElementById('eventsTable');
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        totalRows = rows.length;
-
-        if (totalRows === 0) {
-            const paginationControls = document.getElementById('paginationControls');
-            if (paginationControls) {
-                paginationControls.style.display = 'none';
-            }
-            return;
-        }
-
-        // Show pagination only if more than itemsPerPage rows
-        const paginationControls = document.getElementById('paginationControls');
-        if (paginationControls) {
-            paginationControls.style.display = totalRows > itemsPerPage ? 'flex' : 'none';
-        }
-
-        displayPage(1);
-    }
-
-    function displayPage(pageNum) {
-        const table = document.getElementById('eventsTable');
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        const rows = tbody.querySelectorAll('tr');
-        const totalPages = Math.ceil(totalRows / itemsPerPage);
-
-        // Validate page number
-        if (pageNum < 1) pageNum = 1;
-        if (pageNum > totalPages) pageNum = totalPages;
-
-        currentPage = pageNum;
-
-        // Hide all rows
-        rows.forEach(row => row.style.display = 'none');
-
-        // Show only rows for current page
-        const startIdx = (pageNum - 1) * itemsPerPage;
-        const endIdx = startIdx + itemsPerPage;
-
-        for (let i = startIdx; i < endIdx && i < rows.length; i++) {
-            rows[i].style.display = '';
-        }
-
-        // Update pagination info
-        const pageInfo = document.getElementById('pageInfo');
-        if (pageInfo) {
-            pageInfo.textContent = `Page ${pageNum} of ${totalPages}`;
-        }
-
-        // Update button disabled states
-        const prevBtn = document.getElementById('prevPage');
-        const nextBtn = document.getElementById('nextPage');
-
-        if (prevBtn) prevBtn.disabled = (pageNum === 1);
-        if (nextBtn) nextBtn.disabled = (pageNum === totalPages);
-    }
-
-    function nextPage() {
-        const totalPages = Math.ceil(totalRows / itemsPerPage);
-        if (currentPage < totalPages) {
-            displayPage(currentPage + 1);
-        }
-    }
-
-    function previousPage() {
-        if (currentPage > 1) {
-            displayPage(currentPage - 1);
-        }
-    }
-
-    // Initialize pagination when page loads and after real-time updates
-    document.addEventListener('DOMContentLoaded', () => {
-        if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
-        initializePagination();
-    });
-
-    // Watch for real-time table updates
-    const observerConfig = { childList: true, subtree: true };
-    const observer = new MutationObserver(() => {
-        setTimeout(initializePagination, 100);
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const tbody = document.querySelector('table tbody');
-        if (tbody) {
-            observer.observe(tbody, observerConfig);
-        }
-    });
 </script>
 
-<!-- Real-Time Updates for Events -->
 <script src="/js/events-realtime.js"></script>
