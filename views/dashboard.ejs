@@ -1,7 +1,9 @@
 <%
     const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const workforceCount = typeof totalEmployees !== 'undefined' ? totalEmployees : 0;
-    const pendingOvertime = (typeof overtimeRequests !== 'undefined' ? overtimeRequests : []).filter(r => r.status === 'Pending').length;
+    const pendingOvertime = (typeof overtimeRequests !== 'undefined' ? overtimeRequests : [])
+        .filter(r => ['pending', 'pending approval'].includes(String(r.status || r.otStatus || '').toLowerCase()))
+        .length;
     const pendingLeaves = (typeof leaveRequests !== 'undefined' ? leaveRequests : []).filter(r => r.status === 'Pending').length;
     const payrollEstimate = typeof totalNetPay !== 'undefined' ? totalNetPay : 0;
     const suspendedCount = typeof suspendedEmployees !== 'undefined' ? suspendedEmployees : 0;
