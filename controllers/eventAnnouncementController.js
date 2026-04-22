@@ -87,18 +87,20 @@ async function uploadEventImage(file, title) {
     const fileName = `${base}-${Date.now()}${extension}`;
     const destPath = `events-announcements/${fileName}`;
     const mimetype = String(file.mimetype || '').toLowerCase() || 'image/jpeg';
+    let lastUploadError = null;
 
     if (supabaseImageService.isConfigured()) {
         try {
             const buffer = await fsp.readFile(file.path);
             return await supabaseImageService.uploadToSupabase(buffer, destPath, mimetype);
         } catch (error) {
+            lastUploadError = error;
             console.warn('[EVENT] Supabase unavailable, falling back to local storage:', error.message);
         }
     }
 
     if (env.isVercel) {
-        throw new Error('Image upload requires a working Supabase server key on Vercel. Set SUPABASE_SERVICE_ROLE_KEY and a valid SUPABASE_STORAGE_BUCKET.');
+        throw lastUploadError || new Error('Image upload requires a working storage configuration on Vercel.');
     }
 
     return saveEventImageLocally(file.path, fileName);

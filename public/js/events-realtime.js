@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 text: message,
                 icon: type,
                 timer: 3000,
-                position: 'top-end',
+                position: 'center',
                 showConfirmButton: false
             });
         } else {

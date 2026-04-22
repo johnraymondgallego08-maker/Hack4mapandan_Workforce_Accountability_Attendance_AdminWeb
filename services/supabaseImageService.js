@@ -2,7 +2,6 @@ const env = require('../config/env');
 
 let supabase = null;
 const supabaseBucket = env.supabase.bucket || null;
-const isPublishableKey = String(env.supabase.key || '').startsWith('sb_publishable_');
 
 // Initialize Supabase client
 try {
@@ -27,10 +26,6 @@ async function uploadToSupabase(buffer, destPath, mimeType) {
     try {
         if (!supabase || !supabaseBucket) {
             throw new Error('Supabase not configured. Set SUPABASE_URL, SUPABASE_KEY, and SUPABASE_STORAGE_BUCKET.');
-        }
-
-        if (isPublishableKey) {
-            throw new Error('Supabase upload requires SUPABASE_SERVICE_ROLE_KEY on the server. A publishable key cannot upload storage objects here.');
         }
 
         // Upload file to Supabase
@@ -181,7 +176,6 @@ function isLocalUrl(url) {
 
 module.exports = {
     isConfigured: () => supabase && supabaseBucket,
-    isUsingPublishableKey: () => isPublishableKey,
     uploadToSupabase,
     deleteFromSupabase,
     verifySupabaseConfig,
