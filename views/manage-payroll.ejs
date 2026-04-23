@@ -217,7 +217,7 @@
             </thead>
             <tbody>
                 <% if (paidTransactionsList.length > 0) { %>
-                    <% paidTransactionsList.forEach((row) => { const invoicePayload = row.invoice ? JSON.stringify(row.invoice).replace(/"/g, '&quot;') : ''; const issuedAtLabel = row.invoice && row.invoice.issuedAtLabel ? row.invoice.issuedAtLabel : (row.issuedAt && row.issuedAt.toDate ? row.issuedAt.toDate().toLocaleString() : 'N/A'); %>
+                    <% paidTransactionsList.forEach((row) => { const invoicePayload = row.invoice ? encodeURIComponent(JSON.stringify(row.invoice)) : ''; const issuedAtLabel = row.invoice && row.invoice.issuedAtLabel ? row.invoice.issuedAtLabel : (row.issuedAt && row.issuedAt.toDate ? row.issuedAt.toDate().toLocaleString() : 'N/A'); %>
                         <tr>
                             <td style="color: var(--text-muted); font-size: 0.85rem;"><%= issuedAtLabel %></td>
                             <td style="color: var(--text-muted); font-size: 0.85rem;">
@@ -571,11 +571,15 @@
     .invoice-modal {
         position: fixed;
         inset: 0;
-        z-index: 1000;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
     }
 
     .invoice-modal__backdrop {
-        position: absolute;
+        position: fixed;
         inset: 0;
         background: rgba(15, 23, 42, 0.55);
         backdrop-filter: blur(6px);
@@ -586,7 +590,7 @@
         z-index: 1;
         width: min(760px, calc(100vw - 2rem));
         max-height: calc(100vh - 2rem);
-        margin: 1rem auto;
+        margin: 0;
         overflow: auto;
         border-radius: 1.5rem;
         background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%);
@@ -830,7 +834,13 @@
             if (event && typeof event.preventDefault === 'function') event.preventDefault();
 
             try {
-                const invoice = JSON.parse(trigger.dataset.invoice || '{}');
+                let invoiceText = trigger.dataset.invoice || '{}';
+                try {
+                    invoiceText = decodeURIComponent(invoiceText);
+                } catch (decodeError) {
+                    // keep raw value (older payloads may already be plain JSON)
+                }
+                const invoice = JSON.parse(invoiceText || '{}');
 
                 // Defensive fallback: older records may have incomplete invoice fields.
                 if (!invoice.employeeName && trigger.dataset.employeeName) invoice.employeeName = trigger.dataset.employeeName;

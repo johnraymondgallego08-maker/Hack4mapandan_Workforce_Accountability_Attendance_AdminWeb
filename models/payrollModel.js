@@ -72,6 +72,42 @@ function buildInvoiceData(record = {}, status, timestamp) {
     };
 }
 
+function isMeaningfulString(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function enrichInvoiceData(invoice, baseInvoice) {
+    if (!invoice || !baseInvoice) return invoice || baseInvoice || null;
+
+    const next = { ...invoice };
+    const fill = (key, shouldOverride) => {
+        if (!shouldOverride && next[key] !== undefined && next[key] !== null && next[key] !== '') return;
+        if (baseInvoice[key] === undefined || baseInvoice[key] === null) return;
+        next[key] = baseInvoice[key];
+    };
+
+    // Prefer real employee details when we only have placeholders.
+    const hasPlaceholderName = !isMeaningfulString(next.employeeName) || String(next.employeeName).trim() === 'Employee';
+    fill('employeeId', !isMeaningfulString(next.employeeId));
+    fill('employeeCode', !isMeaningfulString(next.employeeCode));
+    fill('employeeName', hasPlaceholderName);
+    fill('department', !isMeaningfulString(next.department));
+    fill('position', !isMeaningfulString(next.position));
+
+    fill('period', !isMeaningfulString(next.period));
+    fill('periodStart', next.periodStart == null);
+    fill('periodEnd', next.periodEnd == null);
+    fill('periodStartLabel', !isMeaningfulString(next.periodStartLabel));
+    fill('periodEndLabel', !isMeaningfulString(next.periodEndLabel));
+
+    fill('issuedAt', next.issuedAt == null);
+    fill('issuedAtLabel', !isMeaningfulString(next.issuedAtLabel));
+    fill('invoiceNumber', !isMeaningfulString(next.invoiceNumber));
+    fill('status', !isMeaningfulString(next.status));
+
+    return next;
+}
+
 function toFirestoreTimestamp(value) {
     if (!value) return null;
     if (value.toDate && typeof value.toDate === 'function') return value; // already Timestamp
@@ -180,7 +216,10 @@ function normalizeTransactionEntry(entry = {}, record = {}) {
     const timestamp = parseDate(entry.timestamp || entry.createdAt || entry.updatedAt || record.updatedAt || record.paymentDate || new Date()) || new Date();
     const status = normalizePayrollStatus(entry.status || entry.payrollStatus || record.status);
     const amount = Number(getNumericValue(entry.amount ?? record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0).toFixed(2));
-    const invoice = entry.invoice || (status === 'Paid' ? buildInvoiceData(record, status, timestamp) : null);
+    const baseInvoice = status === 'Paid' ? buildInvoiceData(record, status, timestamp) : null;
+    const invoice = status === 'Paid'
+        ? enrichInvoiceData(entry.invoice || null, baseInvoice)
+        : null;
 
     return {
         id: String(entry.id || `${String(record.id || 'payroll').replace(/\s+/g, '-')}-${status.toLowerCase()}`),
@@ -194,6 +233,27 @@ function normalizeTransactionEntry(entry = {}, record = {}) {
     };
 }
 
+async function enrichPayrollRecordForInvoices(record = {}) {
+    const employeeId = String(record.employeeId || '').trim();
+    if (!employeeId) return record;
+
+    try {
+        const user = await userModel.getUserById(employeeId);
+        if (!user) return record;
+
+        return {
+            ...record,
+            employeeName: record.employeeName || user.name || user.email || record.name,
+            employeeCode: record.employeeCode || user.employeeId || employeeId,
+            email: record.email || user.email || '',
+            department: record.department || user.department || '',
+            position: record.position || user.position || ''
+        };
+    } catch (error) {
+        return record;
+    }
+}
+
 function normalizeTransactionHistory(record = {}) {
     const list = Array.isArray(record.transactionHistory) ? record.transactionHistory : [];
     return list
@@ -203,6 +263,49 @@ function normalizeTransactionHistory(record = {}) {
             const bDate = parseDate(b.timestamp) || 0;
             return bDate - aDate;
         });
+}
+
+function buildTransactionHistory(record = {}, options = {}) {
+    const { appendPaidRevision = false } = options;
+    const status = normalizePayrollStatus(record.status);
+    const normalizedHistory = normalizeTransactionHistory(record);
+    const hasStatusEntry = normalizedHistory.some((entry) => entry.status === status);
+
+    if (status === 'Paid' && appendPaidRevision) {
+        const recordTimestamp = parseDate(record.updatedAt || record.paymentDate || record.periodEnd || record.periodStart || new Date()) || new Date();
+        const latestPaid = normalizedHistory.find((entry) => entry && entry.status === 'Paid') || null;
+        const latestPaidTimestamp = latestPaid ? (parseDate(latestPaid.timestamp) || null) : null;
+        const shouldAppend = !latestPaidTimestamp || (recordTimestamp.getTime() - latestPaidTimestamp.getTime() > 1500);
+
+        if (shouldAppend) {
+            const newEntry = normalizeTransactionEntry({
+                id: `${String(record.id || 'payroll')}-paid-${recordTimestamp.getTime()}`,
+                status: 'Paid',
+                action: 'Payroll Paid',
+                amount: getNumericValue(record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0),
+                timestamp: recordTimestamp,
+                invoice: buildInvoiceData(record, 'Paid', recordTimestamp)
+            }, record);
+
+            return [newEntry, ...normalizedHistory];
+        }
+    }
+
+    if (hasStatusEntry) {
+        return normalizedHistory;
+    }
+
+    const timestamp = parseDate(record.updatedAt || record.paymentDate || record.periodEnd || record.periodStart || new Date()) || new Date();
+    const newEntry = normalizeTransactionEntry({
+        id: `${String(record.id || 'payroll')}-${status.toLowerCase()}-${timestamp.getTime()}`,
+        status,
+        action: `Payroll ${status}`,
+        amount: getNumericValue(record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0),
+        timestamp,
+        invoice: status === 'Paid' ? buildInvoiceData(record, status, timestamp) : null
+    }, record);
+
+    return [newEntry, ...normalizedHistory];
 }
 
 async function writeTransactionHistory(docRef, record = {}, transactionHistory = []) {
@@ -221,53 +324,7 @@ async function writeTransactionHistory(docRef, record = {}, transactionHistory =
 }
 
 async function syncTransactionHistoryForDoc(doc, record = {}) {
-    const status = normalizePayrollStatus(record.status);
-    const normalizedHistory = normalizeTransactionHistory(record);
-    const hasStatusEntry = normalizedHistory.some((entry) => entry.status === status);
-
-    // Special rule: if the payroll is saved while status stays Paid, create a new Paid history entry
-    // so the separate transaction ledger shows every paid update as its own receipt.
-    if (status === 'Paid') {
-        const recordTimestamp = parseDate(record.updatedAt || record.paymentDate || record.periodEnd || record.periodStart || new Date()) || new Date();
-        const latestPaid = normalizedHistory.find((entry) => entry && entry.status === 'Paid') || null;
-        const latestPaidTimestamp = latestPaid ? (parseDate(latestPaid.timestamp) || null) : null;
-
-        // Skip if we just wrote one very recently (avoid duplicate writes on fast consecutive calls).
-        const shouldAppend = !latestPaidTimestamp || (recordTimestamp.getTime() - latestPaidTimestamp.getTime() > 1500);
-
-        if (shouldAppend) {
-            const newEntry = normalizeTransactionEntry({
-                id: `${String(record.id || doc.id)}-paid-${recordTimestamp.getTime()}`,
-                status: 'Paid',
-                action: 'Payroll Paid',
-                amount: getNumericValue(record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0),
-                timestamp: recordTimestamp,
-                invoice: buildInvoiceData(record, 'Paid', recordTimestamp)
-            }, record);
-
-            const nextHistory = [newEntry, ...normalizedHistory];
-            await writeTransactionHistory(doc.ref, record, nextHistory);
-            await ensurePaidTransactionRecords(record, nextHistory);
-            return nextHistory;
-        }
-    }
-
-    if (hasStatusEntry) {
-        await ensurePaidTransactionRecords(record, normalizedHistory);
-        return normalizedHistory;
-    }
-
-    const timestamp = parseDate(record.updatedAt || record.paymentDate || record.periodEnd || record.periodStart || new Date()) || new Date();
-    const newEntry = normalizeTransactionEntry({
-        id: `${String(record.id || doc.id)}-${status.toLowerCase()}-${timestamp.getTime()}`,
-        status,
-        action: `Payroll ${status}`,
-        amount: getNumericValue(record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0),
-        timestamp,
-        invoice: status === 'Paid' ? buildInvoiceData(record, status, timestamp) : null
-    }, record);
-
-    const nextHistory = [newEntry, ...normalizedHistory];
+    const nextHistory = buildTransactionHistory(record, { appendPaidRevision: true });
     await writeTransactionHistory(doc.ref, record, nextHistory);
     await ensurePaidTransactionRecords(record, nextHistory);
     return nextHistory;
@@ -345,10 +402,9 @@ exports.getAllPayroll = async () => {
                 position: normalizedDoc.position || (user ? (user.position || '') : ''),
             };
 
-            const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, enrichedRecord);
             payrolls.push({
                 ...enrichedRecord,
-                transactionHistory: syncedTransactionHistory
+                transactionHistory: buildTransactionHistory(enrichedRecord)
             });
         }
 
@@ -387,10 +443,9 @@ exports.getById = async (id, employeeId = '') => {
             position: data.position || (user ? (user.position || '') : ''),
         };
 
-        const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, enrichedRecord);
         return {
             ...enrichedRecord,
-            transactionHistory: syncedTransactionHistory,
+            transactionHistory: buildTransactionHistory(enrichedRecord),
             netPay: data.netPay ?? data.netpay ?? data.net_pay ?? data.totalSalary ?? data.total_salary ?? data.amount ?? data.salary ?? 0,
             paymentDate: data.paymentDate ?? data.periodEnd ?? data.periodStart ?? data.updatedAt ?? data.date ?? data.timestamp ?? null
         };
@@ -422,7 +477,7 @@ exports.update = async (id, data, employeeId = '') => {
                 updatedAt
             });
 
-            const updatedRecord = {
+            const updatedRecord = await enrichPayrollRecordForInvoices({
                 ...existing,
                 basic,
                 bonus,
@@ -431,9 +486,8 @@ exports.update = async (id, data, employeeId = '') => {
                 netpay: netPay,
                 status,
                 updatedAt
-            };
-            const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, updatedRecord);
-            await writeTransactionHistory(doc.ref, updatedRecord, syncedTransactionHistory);
+            });
+            await syncTransactionHistoryForDoc(doc, updatedRecord);
             return true;
         }
         return false;
@@ -468,13 +522,12 @@ exports.updateStatus = async (id, status, employeeId = '') => {
                 status: normalizedStatus,
                 updatedAt
             });
-            const updatedRecord = {
+            const updatedRecord = await enrichPayrollRecordForInvoices({
                 ...existing,
                 status: normalizedStatus,
                 updatedAt
-            };
-            const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, updatedRecord);
-            await writeTransactionHistory(doc.ref, updatedRecord, syncedTransactionHistory);
+            });
+            await syncTransactionHistoryForDoc(doc, updatedRecord);
             return true;
         }
         return false;
@@ -508,9 +561,7 @@ exports.ensureTransactionHistory = async (id, employeeId = '') => {
         if (!doc) return [];
 
         const record = normalizePayrollRecord(doc);
-        const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, record);
-        await writeTransactionHistory(doc.ref, record, syncedTransactionHistory);
-        return syncedTransactionHistory;
+        return syncTransactionHistoryForDoc(doc, record);
     } catch (error) {
         console.error('Error ensuring payroll transaction history:', error);
         return [];
