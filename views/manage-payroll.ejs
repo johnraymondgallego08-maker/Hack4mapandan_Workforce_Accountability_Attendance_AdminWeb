@@ -118,32 +118,6 @@
                                                     <% } %>
                                                 </div>
 
-                                                <div class="payroll-transaction-card">
-                                                    <div class="payroll-transaction-header">
-                                                        <span>Transaction History</span>
-                                                        <strong><%= transactionHistory.length %> entr<%= transactionHistory.length === 1 ? 'y' : 'ies' %></strong>
-                                                    </div>
-                                                    <% if (transactionHistory.length > 0) { %>
-                                                        <div class="payroll-transaction-list">
-                                                            <% transactionHistory.forEach((entry) => { const invoicePayload = entry.invoice ? JSON.stringify(entry.invoice).replace(/"/g, '&quot;') : ''; %>
-                                                                <button type="button" class="payroll-transaction-item <%= entry.status === 'Paid' ? 'is-paid' : '' %>" <%= entry.status === 'Paid' && invoicePayload ? `data-invoice="${invoicePayload}"` : '' %>>
-                                                                    <span class="payroll-transaction-main">
-                                                                        <span class="payroll-transaction-status payroll-transaction-status--<%= String(entry.status || '').toLowerCase() %>"><%= entry.status %></span>
-                                                                        <strong><%= entry.action || `Payroll ${entry.status}` %></strong>
-                                                                        <small><%= entry.timestampLabel || 'No timestamp' %></small>
-                                                                    </span>
-                                                                    <span class="payroll-transaction-side">
-                                                                        <strong>&#8369;<%= Number(entry.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong>
-                                                                        <small><%= entry.status === 'Paid' && entry.invoice ? 'View receipt' : (entry.note || 'Auto-synced') %></small>
-                                                                    </span>
-                                                                </button>
-                                                            <% }) %>
-                                                        </div>
-                                                    <% } else { %>
-                                                        <div class="payroll-calc-empty">No transaction history saved yet.</div>
-                                                    <% } %>
-                                                </div>
-
                                                 <button type="button" class="payroll-calc-toggle" data-target="<%= calcPanelId %>" aria-expanded="false">
                                                     <span>Daily Computation</span>
                                                     <i data-lucide="chevron-down" class="payroll-calc-chevron"></i>
@@ -215,6 +189,89 @@
         </div>
         <div class="pagination-controls" style="padding: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);"></div>
     </div>
+</div>
+
+<% const paidTransactionsList = Array.isArray(locals.paidTransactions) ? locals.paidTransactions : []; %>
+
+<div class="card" style="margin-top: 1.25rem; padding: 0; overflow: hidden; border-radius: 1.5rem;">
+    <div class="card-header">
+        <h3>Transaction History</h3>
+        <div class="search-wrapper">
+            <i data-lucide="search"></i>
+            <input type="text" id="transactionSearchInput" placeholder="Search Transactions...">
+        </div>
+    </div>
+
+    <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 980px;">
+        <table id="payrollTransactionTable">
+            <thead>
+                <tr>
+                    <th data-sortable="true">Timestamp</th>
+                    <th data-sortable="true">Pay Date</th>
+                    <th data-sortable="true">Employee</th>
+                    <th data-sortable="true">Period</th>
+                    <th data-sortable="true">Status</th>
+                    <th data-sortable="true" style="text-align: right;">Amount</th>
+                    <th style="text-align: right;">Invoice</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (paidTransactionsList.length > 0) { %>
+                    <% paidTransactionsList.forEach((row) => { const invoicePayload = row.invoice ? JSON.stringify(row.invoice).replace(/"/g, '&quot;') : ''; const issuedAtLabel = row.invoice && row.invoice.issuedAtLabel ? row.invoice.issuedAtLabel : (row.issuedAt && row.issuedAt.toDate ? row.issuedAt.toDate().toLocaleString() : 'N/A'); %>
+                        <tr>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;"><%= issuedAtLabel %></td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                <%= row.payDateLabel || ((row.paySlot === '15') ? '15th' : (row.paySlot === 'end' ? 'End of Month' : 'N/A')) %>
+                            </td>
+                            <td>
+                                <% if (invoicePayload) { %>
+                                    <button
+                                        type="button"
+                                        class="invoice-employee-trigger invoice-trigger"
+                                        data-invoice="<%= invoicePayload %>"
+                                        data-employee-name="<%= row.employeeName || (row.invoice && row.invoice.employeeName) || '' %>"
+                                        data-employee-code="<%= row.employeeCode || (row.invoice && row.invoice.employeeCode) || row.employeeId || '' %>">
+                                        <span class="invoice-employee-trigger__name"><%= row.employeeName || (row.invoice && row.invoice.employeeName) || 'Employee' %></span>
+                                        <span class="invoice-employee-trigger__code"><%= row.employeeCode || (row.invoice && row.invoice.employeeCode) || row.employeeId || 'N/A' %></span>
+                                    </button>
+                                <% } else { %>
+                                    <div style="font-weight: 800; color: var(--text-heading);"><%= row.employeeName || (row.invoice && row.invoice.employeeName) || 'Employee' %></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);"><%= row.employeeCode || (row.invoice && row.invoice.employeeCode) || row.employeeId || 'N/A' %></div>
+                                <% } %>
+                            </td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;"><%= (row.invoice && row.invoice.period) || row.period || 'N/A' %></td>
+                            <td style="color: var(--text-muted); font-size: 0.85rem;">
+                                <span class="payroll-transaction-status payroll-transaction-status--paid">Paid</span>
+                            </td>
+                            <td style="text-align: right; font-weight: 800; color: var(--text-heading); font-family: 'JetBrains Mono', 'Fira Code', monospace;">
+                                &#8369;<%= Number(row.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                            </td>
+                            <td style="text-align: right;">
+                                <% if (invoicePayload) { %>
+                                    <button
+                                        type="button"
+                                        class="btn invoice-trigger"
+                                        data-invoice="<%= invoicePayload %>"
+                                        data-employee-name="<%= row.employeeName || (row.invoice && row.invoice.employeeName) || '' %>"
+                                        data-employee-code="<%= row.employeeCode || (row.invoice && row.invoice.employeeCode) || row.employeeId || '' %>"
+                                        style="padding: 0.35rem 0.8rem; font-size: 0.75rem; border-radius: 999px;">
+                                        View Receipt
+                                    </button>
+                                <% } else { %>
+                                    <span style="color: var(--text-muted); font-size: 0.8rem;">—</span>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }) %>
+                <% } else { %>
+                    <tr data-empty-state="true">
+                        <td colspan="7" style="padding: 2.25rem; text-align: center; color: var(--text-muted); font-style: italic;">No saved transaction history yet.</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination-controls transaction-pagination" style="padding: 1.25rem; display: flex; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.02);"></div>
 </div>
 
 <div id="invoiceModal" class="invoice-modal" hidden>
@@ -308,8 +365,7 @@
         gap: 0.55rem;
     }
 
-    .payroll-breakdown-card,
-    .payroll-transaction-card {
+    .payroll-breakdown-card {
         border: 1px solid var(--border-glass);
         border-radius: 0.85rem;
         padding: 0.75rem 0.8rem;
@@ -319,8 +375,7 @@
     }
 
     .payroll-breakdown-row,
-    .payroll-breakdown-total,
-    .payroll-transaction-header {
+    .payroll-breakdown-total {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -330,8 +385,7 @@
     }
 
     .payroll-breakdown-row strong,
-    .payroll-breakdown-total strong,
-    .payroll-transaction-header strong {
+    .payroll-breakdown-total strong {
         color: var(--text-heading);
         font-family: 'JetBrains Mono', 'Fira Code', monospace;
     }
@@ -343,57 +397,28 @@
         font-weight: 700;
     }
 
-    .payroll-transaction-list {
-        display: grid;
-        gap: 0.45rem;
-    }
-
-    .payroll-transaction-item {
+    .invoice-employee-trigger {
         width: 100%;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        border-radius: 0.85rem;
-        background: rgba(255, 255, 255, 0.88);
-        padding: 0.75rem;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 0.8rem;
         text-align: left;
-        cursor: default;
-        transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-    }
-
-    .payroll-transaction-item.is-paid {
+        border: 0;
+        padding: 0;
+        background: transparent;
         cursor: pointer;
-        border-color: rgba(22, 163, 74, 0.22);
-        box-shadow: 0 10px 24px -18px rgba(22, 163, 74, 0.65);
-    }
-
-    .payroll-transaction-item.is-paid:hover {
-        transform: translateY(-1px);
-        background: rgba(240, 253, 244, 0.95);
-    }
-
-    .payroll-transaction-main,
-    .payroll-transaction-side {
         display: grid;
-        gap: 0.22rem;
+        gap: 0.15rem;
     }
 
-    .payroll-transaction-main strong,
-    .payroll-transaction-side strong {
+    .invoice-employee-trigger__name {
+        font-weight: 800;
         color: var(--text-heading);
-        font-size: 0.78rem;
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
     }
 
-    .payroll-transaction-main small,
-    .payroll-transaction-side small {
+    .invoice-employee-trigger__code {
+        font-size: 0.75rem;
         color: var(--text-muted);
-        font-size: 0.68rem;
-    }
-
-    .payroll-transaction-side {
-        justify-items: end;
+        text-decoration: none;
     }
 
     .payroll-transaction-status {
@@ -734,6 +759,7 @@
 
         if (typeof initTableManagement === 'function') {
             initTableManagement('#payrollTable', '#searchInput', '.pagination-controls', 10);
+            initTableManagement('#payrollTransactionTable', '#transactionSearchInput', '.transaction-pagination', 10);
         }
 
         document.querySelectorAll('.payroll-calc-toggle').forEach((toggleBtn) => {
@@ -793,16 +819,30 @@
             document.body.style.overflow = '';
         };
 
-        document.querySelectorAll('.payroll-transaction-item[data-invoice]').forEach((item) => {
-            item.addEventListener('click', () => {
-                try {
-                    const invoice = JSON.parse(item.dataset.invoice || '{}');
-                    openInvoiceModal(invoice);
-                } catch (error) {
-                    console.error('Failed to parse invoice data:', error);
-                }
-            });
-        });
+        // Use event delegation so pagination/search DOM changes won't break receipt clicks.
+        document.addEventListener('click', (event) => {
+            const trigger = event.target && event.target.closest
+                ? event.target.closest('.invoice-trigger[data-invoice]')
+                : null;
+            if (!trigger) return;
+
+            // Make sure we handle this even if another handler stops bubbling.
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+
+            try {
+                const invoice = JSON.parse(trigger.dataset.invoice || '{}');
+
+                // Defensive fallback: older records may have incomplete invoice fields.
+                if (!invoice.employeeName && trigger.dataset.employeeName) invoice.employeeName = trigger.dataset.employeeName;
+                if (!invoice.employeeCode && trigger.dataset.employeeCode) invoice.employeeCode = trigger.dataset.employeeCode;
+                if (!invoice.employeeId && trigger.dataset.employeeCode) invoice.employeeId = trigger.dataset.employeeCode;
+                if (!invoice.status) invoice.status = 'Paid';
+
+                openInvoiceModal(invoice);
+            } catch (error) {
+                console.error('Failed to parse invoice data:', error);
+            }
+        }, true);
 
         if (invoiceModal) {
             invoiceModal.querySelectorAll('[data-close-invoice="true"]').forEach((button) => {

@@ -739,8 +739,11 @@ exports.managePayroll = async (req, res) => {
             await Promise.allSettled(dailyHistorySyncTasks);
         }
 
+        const paidTransactions = await payrollModel.getPaidTransactionsByMonthYear(y, m);
+
         res.render('manage-payroll', {
             payroll: groupedPayroll,
+            paidTransactions,
             selectedMonth: m,
             selectedYear: y,
             selectedPayrollDate

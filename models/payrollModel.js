@@ -1,6 +1,7 @@
-const { db } = require('../config/firebaseAdmin');
+const { db, admin } = require('../config/firebaseAdmin');
 const userModel = require('./userModel');
 const APP_TIMEZONE = 'Asia/Manila';
+const PAYROLL_TRANSACTIONS_COLLECTION = 'payroll_transactions';
 
 function parseDate(value) {
     if (!value) return null;
@@ -71,6 +72,110 @@ function buildInvoiceData(record = {}, status, timestamp) {
     };
 }
 
+function toFirestoreTimestamp(value) {
+    if (!value) return null;
+    if (value.toDate && typeof value.toDate === 'function') return value; // already Timestamp
+    if (value instanceof Date) return admin.firestore.Timestamp.fromDate(value);
+    const parsed = parseDate(value);
+    return parsed ? admin.firestore.Timestamp.fromDate(parsed) : null;
+}
+
+function buildPaidTransactionDocId(record = {}, entry = {}) {
+    const employeeId = String(record.employeeId || '').trim() || 'employee';
+    const payrollId = String(record.id || record.payrollId || '').trim() || 'payroll';
+    const entryId = String(entry.id || '').trim() || `paid-${Date.now()}`;
+    return `${employeeId}-${payrollId}-${entryId}`.replace(/[\/\\#?\s]+/g, '_');
+}
+
+function parsePayrollIdPeriod(payrollId = '') {
+    const parts = String(payrollId || '').split('-');
+    if (parts.length !== 3) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const periodIdx = parseInt(parts[2], 10);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(periodIdx)) return null;
+    if (periodIdx !== 1 && periodIdx !== 2) return null;
+    return { year, month, periodIdx };
+}
+
+function buildPayDateInfo(record = {}) {
+    const payrollId = String(record.id || '').trim();
+    const parsed = parsePayrollIdPeriod(payrollId);
+    if (!parsed) return { paySlot: '', payDate: null, payDateLabel: '' };
+
+    const year = parsed.year;
+    const monthIndex = parsed.month - 1; // payroll id month is 1-12
+    const paySlot = parsed.periodIdx === 1 ? '15' : 'end';
+    const payDate = parsed.periodIdx === 1
+        ? new Date(year, monthIndex, 15)
+        : new Date(year, monthIndex + 1, 0);
+
+    return {
+        paySlot,
+        payDate,
+        payDateLabel: payDate.toLocaleDateString('en-US', {
+            timeZone: APP_TIMEZONE,
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        })
+    };
+}
+
+async function upsertPaidTransactionRecord(record = {}, entry = {}) {
+    const invoice = entry.invoice || null;
+    if (!invoice) return null;
+
+    const docId = buildPaidTransactionDocId(record, entry);
+    const ref = db.collection(PAYROLL_TRANSACTIONS_COLLECTION).doc(docId);
+
+    const issuedAt = parseDate(invoice.issuedAt || entry.timestamp) || new Date();
+
+    const payDateInfo = buildPayDateInfo(record);
+
+    const payload = {
+        employeeId: String(invoice.employeeId || record.employeeId || '').trim(),
+        employeeCode: String(invoice.employeeCode || record.employeeCode || record.employeeId || '').trim(),
+        employeeName: String(invoice.employeeName || record.employeeName || record.name || 'Employee'),
+        department: String(invoice.department || record.department || ''),
+        position: String(invoice.position || record.position || ''),
+        payrollId: String(record.id || '').trim(),
+        payrollPath: record.payrollPath || null,
+        paySlot: payDateInfo.paySlot || null,
+        payDate: payDateInfo.payDate ? toFirestoreTimestamp(payDateInfo.payDate) : null,
+        payDateLabel: payDateInfo.payDateLabel || null,
+        status: 'Paid',
+        action: entry.action || 'Payroll Paid',
+        amount: Number(getNumericValue(invoice.amount).toFixed(2)),
+        invoiceNumber: String(invoice.invoiceNumber || ''),
+        sourceEntryId: String(entry.id || ''),
+        invoice,
+        issuedAt: toFirestoreTimestamp(issuedAt) || admin.firestore.Timestamp.now(),
+        createdAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    await ref.set(payload, { merge: true });
+    return { id: docId, ...payload };
+}
+
+async function ensurePaidTransactionRecords(record = {}, transactionHistory = []) {
+    const paidEntries = (Array.isArray(transactionHistory) ? transactionHistory : []).filter((entry) => entry && entry.status === 'Paid' && entry.invoice);
+    if (!paidEntries.length) return;
+
+    // Upsert the latest Paid entry (by timestamp) so we don't spam writes.
+    const latestPaid = paidEntries
+        .slice()
+        .sort((a, b) => {
+            const aDate = parseDate(a.timestamp) || 0;
+            const bDate = parseDate(b.timestamp) || 0;
+            return bDate - aDate;
+        })[0];
+
+    // Deterministic doc id includes entry.id, so this becomes idempotent for each paid event.
+    await upsertPaidTransactionRecord(record, latestPaid);
+}
+
 function normalizeTransactionEntry(entry = {}, record = {}) {
     const timestamp = parseDate(entry.timestamp || entry.createdAt || entry.updatedAt || record.updatedAt || record.paymentDate || new Date()) || new Date();
     const status = normalizePayrollStatus(entry.status || entry.payrollStatus || record.status);
@@ -120,7 +225,35 @@ async function syncTransactionHistoryForDoc(doc, record = {}) {
     const normalizedHistory = normalizeTransactionHistory(record);
     const hasStatusEntry = normalizedHistory.some((entry) => entry.status === status);
 
+    // Special rule: if the payroll is saved while status stays Paid, create a new Paid history entry
+    // so the separate transaction ledger shows every paid update as its own receipt.
+    if (status === 'Paid') {
+        const recordTimestamp = parseDate(record.updatedAt || record.paymentDate || record.periodEnd || record.periodStart || new Date()) || new Date();
+        const latestPaid = normalizedHistory.find((entry) => entry && entry.status === 'Paid') || null;
+        const latestPaidTimestamp = latestPaid ? (parseDate(latestPaid.timestamp) || null) : null;
+
+        // Skip if we just wrote one very recently (avoid duplicate writes on fast consecutive calls).
+        const shouldAppend = !latestPaidTimestamp || (recordTimestamp.getTime() - latestPaidTimestamp.getTime() > 1500);
+
+        if (shouldAppend) {
+            const newEntry = normalizeTransactionEntry({
+                id: `${String(record.id || doc.id)}-paid-${recordTimestamp.getTime()}`,
+                status: 'Paid',
+                action: 'Payroll Paid',
+                amount: getNumericValue(record.netPay ?? record.netpay ?? record.net_pay ?? record.totalSalary ?? record.total_salary ?? 0),
+                timestamp: recordTimestamp,
+                invoice: buildInvoiceData(record, 'Paid', recordTimestamp)
+            }, record);
+
+            const nextHistory = [newEntry, ...normalizedHistory];
+            await writeTransactionHistory(doc.ref, record, nextHistory);
+            await ensurePaidTransactionRecords(record, nextHistory);
+            return nextHistory;
+        }
+    }
+
     if (hasStatusEntry) {
+        await ensurePaidTransactionRecords(record, normalizedHistory);
         return normalizedHistory;
     }
 
@@ -136,6 +269,7 @@ async function syncTransactionHistoryForDoc(doc, record = {}) {
 
     const nextHistory = [newEntry, ...normalizedHistory];
     await writeTransactionHistory(doc.ref, record, nextHistory);
+    await ensurePaidTransactionRecords(record, nextHistory);
     return nextHistory;
 }
 
@@ -194,16 +328,28 @@ exports.getAllPayroll = async () => {
         const payrolls = [];
         for (const doc of snapshot.docs) {
             const normalizedDoc = normalizePayrollRecord(doc);
-            const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, normalizedDoc);
-            const data = {
-                ...normalizedDoc,
-                transactionHistory: syncedTransactionHistory
-            };
-            const employeeId = String(data.employeeId || '').trim();
+            const employeeId = String(normalizedDoc.employeeId || '').trim();
 
-            const user = userMap.get(employeeId);
-            const employeeName = data.employeeName || (user ? (user.name || user.email) : 'Unknown');
-            payrolls.push({ ...data, employeeId, employeeName });
+            const user = userMap.get(employeeId) || null;
+            const employeeName = normalizedDoc.employeeName || (user ? (user.name || user.email) : 'Unknown');
+            const employeeCode = normalizedDoc.employeeCode || (user ? (user.employeeId || '') : '') || employeeId;
+
+            // Important: sync invoice history using enriched employee info so receipts look correct.
+            const enrichedRecord = {
+                ...normalizedDoc,
+                employeeId,
+                employeeName,
+                employeeCode,
+                email: normalizedDoc.email || (user ? (user.email || '') : ''),
+                department: normalizedDoc.department || (user ? (user.department || '') : ''),
+                position: normalizedDoc.position || (user ? (user.position || '') : ''),
+            };
+
+            const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, enrichedRecord);
+            payrolls.push({
+                ...enrichedRecord,
+                transactionHistory: syncedTransactionHistory
+            });
         }
 
         payrolls.sort((a, b) => {
@@ -225,9 +371,25 @@ exports.getById = async (id, employeeId = '') => {
         if (!doc) return null;
 
         const data = normalizePayrollRecord(doc);
-        const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, data);
-        return {
+        const resolvedEmployeeId = String(data.employeeId || employeeId || '').trim();
+        let user = null;
+        if (resolvedEmployeeId) {
+            user = await userModel.getUserById(resolvedEmployeeId);
+        }
+
+        const enrichedRecord = {
             ...data,
+            employeeId: resolvedEmployeeId || data.employeeId,
+            employeeName: data.employeeName || (user ? (user.name || user.email) : undefined),
+            employeeCode: data.employeeCode || (user ? (user.employeeId || '') : '') || resolvedEmployeeId,
+            email: data.email || (user ? (user.email || '') : ''),
+            department: data.department || (user ? (user.department || '') : ''),
+            position: data.position || (user ? (user.position || '') : ''),
+        };
+
+        const syncedTransactionHistory = await syncTransactionHistoryForDoc(doc, enrichedRecord);
+        return {
+            ...enrichedRecord,
             transactionHistory: syncedTransactionHistory,
             netPay: data.netPay ?? data.netpay ?? data.net_pay ?? data.totalSalary ?? data.total_salary ?? data.amount ?? data.salary ?? 0,
             paymentDate: data.paymentDate ?? data.periodEnd ?? data.periodStart ?? data.updatedAt ?? data.date ?? data.timestamp ?? null
@@ -351,6 +513,31 @@ exports.ensureTransactionHistory = async (id, employeeId = '') => {
         return syncedTransactionHistory;
     } catch (error) {
         console.error('Error ensuring payroll transaction history:', error);
+        return [];
+    }
+};
+
+exports.getPaidTransactionsByMonthYear = async (year, month) => {
+    try {
+        const y = parseInt(year, 10);
+        const m = parseInt(month, 10);
+        if (Number.isNaN(y) || Number.isNaN(m)) return [];
+
+        const start = new Date(y, m, 1, 0, 0, 0, 0);
+        const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+
+        const startTs = admin.firestore.Timestamp.fromDate(start);
+        const endTs = admin.firestore.Timestamp.fromDate(end);
+
+        const snapshot = await db.collection(PAYROLL_TRANSACTIONS_COLLECTION)
+            .where('issuedAt', '>=', startTs)
+            .where('issuedAt', '<=', endTs)
+            .orderBy('issuedAt', 'desc')
+            .get();
+
+        return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error('Error loading paid payroll transactions:', error);
         return [];
     }
 };
