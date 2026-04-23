@@ -1,7 +1,9 @@
 <%
     const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const workforceCount = typeof totalEmployees !== 'undefined' ? totalEmployees : 0;
-    const pendingOvertime = (typeof overtimeRequests !== 'undefined' ? overtimeRequests : []).filter(r => r.status === 'Pending').length;
+    const pendingOvertime = (typeof overtimeRequests !== 'undefined' ? overtimeRequests : [])
+        .filter(r => ['pending', 'pending approval'].includes(String(r.status || r.otStatus || '').toLowerCase()))
+        .length;
     const pendingLeaves = (typeof leaveRequests !== 'undefined' ? leaveRequests : []).filter(r => r.status === 'Pending').length;
     const payrollEstimate = typeof totalNetPay !== 'undefined' ? totalNetPay : 0;
     const suspendedCount = typeof suspendedEmployees !== 'undefined' ? suspendedEmployees : 0;
@@ -11,6 +13,10 @@
     const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
     const dashboardEvents = typeof events !== 'undefined' ? events : [];
     const dashboardAnnouncements = typeof announcements !== 'undefined' ? announcements : [];
+    const currentHolidayMonthLabel = typeof locals.holidayMonthLabel !== 'undefined' ? locals.holidayMonthLabel : '';
+    const currentDashboardCharts = typeof locals.dashboardCharts !== 'undefined' ? locals.dashboardCharts : {};
+    const attendanceChartData = currentDashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
+    const overtimeChartData = currentDashboardCharts.overtime || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [0, 0, 0, 0, 0, 0, 0] };
 %>
 
 <div class="dashboard-shell">
@@ -136,6 +142,7 @@
                 <div class="analytics-card">
                     <div class="analytics-card__header">
                         <span>Approval Pipeline (Pending)</span>
+                        <span>Overtime Request Hours</span>
                     </div>
                     <div class="analytics-card__canvas">
                         <canvas id="overtimeChart"></canvas>
@@ -167,12 +174,12 @@
             </div>
 
             <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0;">
-                <table id="recentActivityTable\">
+                <table id="recentActivityTable">
                     <thead>
                         <tr>
-                            <th data-sortable=\"true\">Employee</th>
-                            <th data-sortable=\"true\">Log Time</th>
-                            <th style=\"text-align: right;\" data-sortable=\"true\">Date</th>
+                            <th data-sortable="true">Employee</th>
+                            <th data-sortable="true">Log Time</th>
+                            <th style="text-align: right;" data-sortable="true">Date</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -229,6 +236,8 @@
                     frameborder="0" 
                     scrolling="no">
                 </iframe>
+                <h3>Holidays This Month</h3>
+                <span style="font-size: 0.85rem; color: var(--text-muted);"><%= currentHolidayMonthLabel || '' %></span>
             </div>
         </div>
     </section>
@@ -282,11 +291,15 @@
                                         <%= ann.summary %>
                                     </span>
                                 </div>
+                            <div class="holiday-item__content">
+                                <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
+                                <span><%= holiday.type || 'Holiday' %> • <%= holiday.statusLabel || 'Upcoming' %></span>
                             </div>
                         </div>
                     <% }) %>
                 <% } else { %>
                     <div class="dashboard-empty-state" style="padding: 2rem;">No new announcements.</div>
+                    <div class="dashboard-empty-state">No holidays found for this month.</div>
                 <% } %>
             </div>
         </div>
@@ -324,6 +337,10 @@
                 datasets: [{
                     data: [<%= attendanceOverviewData.active %>, <%= suspendedCount %>, <%= attendanceOverviewData.absent %>],
                     backgroundColor: ['#7c3aed', '#dc2626', '#e4def8'],
+                labels: <%- JSON.stringify(attendanceChartData.labels) %>,
+                datasets: [{
+                    data: <%- JSON.stringify(attendanceChartData.values) %>,
+                    backgroundColor: ['#7c3aed', '#38bdf8', '#f59e0b', '#e4def8'],
                     hoverOffset: 14,
                     borderWidth: 0,
                     borderRadius: 8
@@ -390,6 +407,13 @@
                     backgroundColor: ['#10b981', '#f59e0b'],
                     borderRadius: 6,
                     maxBarThickness: 100
+                labels: <%- JSON.stringify(overtimeChartData.labels) %>,
+                datasets: [{
+                    label: 'Overtime Hours',
+                    data: <%- JSON.stringify(overtimeChartData.values) %>,
+                    backgroundColor: gradient,
+                    borderRadius: 12,
+                    barThickness: 16
                 }]
             },
             options: {

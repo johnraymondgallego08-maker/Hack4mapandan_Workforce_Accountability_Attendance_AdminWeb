@@ -8,10 +8,56 @@ function getOvertimeCollection() {
     return db.collection('overtime');
 }
 
+function isRequestedFlag(value) {
+    return value === true || String(value || '').trim().toLowerCase() === 'true';
+}
+
+function normalizeOvertimeStatus(data = {}) {
+    const rawStatus = String(data.otStatus || data.status || '').trim().toLowerCase();
+
+    if (rawStatus === 'approved') return 'Approved';
+    if (rawStatus === 'rejected') return 'Rejected';
+    if (rawStatus === 'pending approval' || rawStatus === 'pending') return 'Pending Approval';
+    if (rawStatus === 'ot') return 'Pending Approval';
+    if (isRequestedFlag(data.isOTRequested)) return 'Pending Approval';
+
+    return '';
+}
+
+function formatDateValue(value) {
+    if (!value) return null;
+    if (value.toDate && typeof value.toDate === 'function') {
+        return value.toDate().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+}
+
+function formatDisplayDate(value) {
+    if (!value) return null;
+    try {
+        const parsed = value.toDate ? value.toDate() : new Date(value);
+        return Number.isNaN(parsed.getTime())
+            ? String(value)
+            : parsed.toLocaleDateString('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+    } catch (error) {
+        return String(value);
+    }
+}
+
+function getOvertimeDateSource(data = {}) {
+    return data.timeIn || data.timestamp || data.requestedDate || data.createdAt || data.date || data._ts || null;
+}
+
 exports.getAll = async () => {
     try {
         const overtimeCollection = getOvertimeCollection();
-        const seenRequests = new Set(); // For de-duplication by Employee + Date
         const allDocs = [];
         
         // 1. Fetch from manual overtime collection
@@ -28,7 +74,11 @@ exports.getAll = async () => {
             const queries = [
                 db.collection('attendance').where('isOTRequested', '==', true).get(),
                 db.collection('attendance').where('isOTRequested', '==', 'true').get(),
-                db.collection('attendance').where('otStatus', '==', 'Pending Approval').get()
+                db.collection('attendance').where('otStatus', '==', 'Pending Approval').get(),
+                db.collection('attendance').where('otStatus', '==', 'Pending').get(),
+                db.collection('attendance').where('otStatus', '==', 'Approved').get(),
+                db.collection('attendance').where('otStatus', '==', 'Rejected').get(),
+                db.collection('attendance').where('status', '==', 'OT').get()
             ];
             
             const results = await Promise.all(queries);
@@ -39,13 +89,12 @@ exports.getAll = async () => {
             });
         } catch (err) {
             console.warn("[OVERTIME MODEL] Optimized query failed. Performing manual scan of attendance...");
-            // FAIL-SAFE: If indices are missing, manually filter to ensure NO request is missed
-            const fallbackSnapshot = await db.collection('attendance').limit(100).get(); // Add a limit
+            // FAIL-SAFE: If indices are missing, manually filter to ensure no request is missed.
+            const fallbackSnapshot = await db.collection('attendance').get();
             fallbackSnapshot.docs.forEach(doc => {
-                const data = doc.data();
-                const isRequested = data.isOTRequested === true || String(data.isOTRequested).toLowerCase() === 'true';
-                const hasOtStatus = data.otStatus === 'Pending Approval';
-                if ((isRequested || hasOtStatus) && !allDocs.some(d => d.id === doc.id)) {
+                const data = doc.data() || {};
+                const normalizedStatus = normalizeOvertimeStatus(data);
+                if ((isRequestedFlag(data.isOTRequested) || normalizedStatus) && !allDocs.some(d => d.id === doc.id)) {
                     allDocs.push(doc);
                 }
             });
@@ -53,31 +102,17 @@ exports.getAll = async () => {
 
         const requests = [];
 
-        const formatDateValue = (v) => {
-            if (!v) return null;
-            if (v.toDate && typeof v.toDate === 'function') return v.toDate().toLocaleString();
-            const d = new Date(v);
-            return isNaN(d.getTime()) ? null : d.toLocaleString();
-        };
-
         allDocs.forEach(doc => {
             const data = doc.data() || {};
             const id = doc.id;
+            const normalizedStatus = normalizeOvertimeStatus(data);
+            if (!normalizedStatus) return;
             // Keep original date object for sorting (overtime occurrence date or fallback to timestamp)
-            const sortDate = data.date || data.timeIn || data.timestamp || data.createdAt || data.requestedDate;
+            const sortDate = getOvertimeDateSource(data);
 
             // Normalize displayed fields
-            let displayDate = null;
-            // Check all possible date fields used in attendance or overtime collections
-            const dateSource = data.date || data.timeIn || data.timestamp;
-            if (dateSource) {
-                try {
-                    const d = dateSource.toDate ? dateSource.toDate() : new Date(dateSource);
-                    displayDate = isNaN(d.getTime()) ? String(dateSource) : d.toLocaleDateString();
-                } catch (e) {
-                    displayDate = String(dateSource);
-                }
-            }
+            const dateSource = getOvertimeDateSource(data);
+            const displayDate = formatDisplayDate(dateSource);
 
             // Ensure requestedDate doesn't fall back to null if timestamp exists
             const requestedDate = formatDateValue(data.requestedDate || data.requestedAt || data.createdAt || data.timestamp || data._ts);
@@ -96,16 +131,15 @@ exports.getAll = async () => {
             requests.push({
                 ...data,
                 id: id,
+                sourceCollection: doc.ref.parent && doc.ref.parent.id ? doc.ref.parent.id : 'unknown',
                 employee: data.employeeName || data.name || data.employee || data.employeeId || 'Unknown',
-                employeeId: data.employeeId || id,
+                employeeId: data.employeeId || data.userId || id,
                 // Attendance punch status (Timed In / Timed Out)
                 attendanceStatus: data.status || 'N/A',
-                // Map status for UI: Ignore "Auto-Logout" etc., show "Pending Approval" by default
-                status: (data.otStatus === 'Approved' || data.otStatus === 'Rejected') ? data.otStatus : 'Pending Approval',
-                otStatus: (data.otStatus === 'Approved' || data.otStatus === 'Rejected') 
-                    ? data.otStatus 
-                    : 'Pending Approval',
-                hours: data.otHours || data.hours || 'N/A',
+                status: normalizedStatus,
+                otStatus: normalizedStatus,
+                hours: data.otHours || data.hours || data.totalHours || data.workHours || 'N/A',
+                reason: data.reason || data.otReason || data.remarks || data.note || data.attendanceStatus || 'OT request from attendance log',
                 date: displayDate || 'N/A',
                 requestedDate: requestedDate,
                 actionDate: actionDate,
@@ -115,7 +149,6 @@ exports.getAll = async () => {
         });
         
         // Smart De-duplication: If the same employee has an OT request on the same date, keep the one with a valid status
-        const finalRequests = [];
         const uniqueMap = new Map();
         
         requests.forEach(req => {
@@ -181,6 +214,7 @@ exports.approve = async (id, performedBy = {}) => {
         if (doc.exists) {
             const actionDate = new Date();
             await docRef.update({
+                isOTRequested: false,
                 otStatus: 'Approved',
                 actionDate: actionDate,
                 approvedAt: actionDate,
@@ -224,6 +258,7 @@ exports.reject = async (id, performedBy = {}) => {
         if (doc.exists) {
             const actionDate = new Date();
             await docRef.update({
+                isOTRequested: false,
                 otStatus: 'Rejected',
                 actionDate: actionDate,
                 rejectedAt: actionDate,

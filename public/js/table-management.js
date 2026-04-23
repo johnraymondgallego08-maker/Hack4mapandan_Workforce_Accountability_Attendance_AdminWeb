@@ -1,4 +1,5 @@
 (function () {
+    window.managedTableManagers = window.managedTableManagers || {};
     function parseColumnIndex(value) {
         if (value === undefined || value === null || value === '') return null;
         const parsed = Number.parseInt(value, 10);
@@ -55,8 +56,7 @@
         const dateFilter = resolveElement(options.dateFilterSelector || '#dateFilter');
 
         const allRows = Array.from(tbody.querySelectorAll('tr'));
-        const emptyStateRows = allRows.filter(isEmptyStateRow);
-        const dataRows = allRows.filter((row) => !isEmptyStateRow(row));
+        let emptyStateRows = allRows.filter(isEmptyStateRow);
         const headers = Array.from(table.querySelectorAll('thead th'));
 
         // If the server-side template did not include an explicit empty-state row,
@@ -78,10 +78,23 @@
             emptyStateRows.push(emptyTr);
         }
 
-        let filteredRows = [...dataRows];
+        let filteredRows = [...allRows.filter((row) => !isEmptyStateRow(row))];
         let currentPage = 1;
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
+
+        function getAllRows() {
+            return Array.from(tbody.querySelectorAll('tr'));
+        }
+
+        function getDataRows() {
+            return getAllRows().filter((row) => !isEmptyStateRow(row));
+        }
+
+        function ensureEmptyStateRows() {
+            emptyStateRows = getAllRows().filter(isEmptyStateRow);
+            return emptyStateRows;
+        }
 
         function getStatusText(row) {
             if (!statusFilter) return '';
@@ -117,6 +130,7 @@
         }
 
         function syncEmptyState() {
+            ensureEmptyStateRows();
             emptyStateRows.forEach((row) => {
                 row.style.display = filteredRows.length === 0 ? '' : 'none';
             });
@@ -145,13 +159,16 @@
         }
 
         function reorderRows() {
+            const dataRows = getDataRows();
             const hiddenRows = dataRows.filter((row) => !filteredRows.includes(row));
             filteredRows.forEach((row) => tbody.appendChild(row));
             hiddenRows.forEach((row) => tbody.appendChild(row));
+            ensureEmptyStateRows();
             emptyStateRows.forEach((row) => tbody.appendChild(row));
         }
 
         function displayPage(page) {
+            const dataRows = getDataRows();
             const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
             currentPage = Math.min(Math.max(page, 1), totalPages);
 
@@ -252,6 +269,7 @@
         }
 
         function applyFilters(resetPage = true) {
+            const dataRows = getDataRows();
             const searchValue = normalizeText(searchInput ? searchInput.value : '');
             const statusValue = normalizeText(statusFilter ? statusFilter.value : '');
 
@@ -306,9 +324,23 @@
         updateSortIndicators();
         applyFilters();
 
-        return {
+        const manager = {
             refresh: () => applyFilters(false),
             sortBy: sortRows
         };
+
+        if (table.id) {
+            window.managedTableManagers[table.id] = manager;
+        }
+
+        return manager;
+    };
+
+    window.refreshManagedTable = function refreshManagedTable(tableId) {
+        const normalizedId = String(tableId || '').replace(/^#/, '');
+        const manager = window.managedTableManagers[normalizedId];
+        if (!manager || typeof manager.refresh !== 'function') return null;
+        manager.refresh();
+        return manager;
     };
 }());

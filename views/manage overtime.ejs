@@ -2,12 +2,18 @@
     const statusClassMap = {
         'Approved': 'status-present',
         'Rejected': 'status-absent',
-        'Pending': 'status-late'
+        'Pending': 'status-late',
+        'Pending Approval': 'status-late'
     };
 
     // Extract unique IDs and Employees for filters
     const uniqueIds = [...new Set((overtimeRequests || []).filter(r => r.status === 'Pending').map(r => r.id.substring(0, 8)))].sort();
     const uniqueEmployees = [...new Set((overtimeRequests || []).filter(r => r.status === 'Pending').map(r => r.employee))].sort();
+    const allRequests = overtimeRequests || [];
+    const pendingRequests = allRequests.filter(request => {
+        const status = String(request.otStatus || request.status || '').trim().toLowerCase();
+        return status === 'pending approval' || status === 'pending';
+    });
 %>
 <style>
     .filter-container {
@@ -139,21 +145,20 @@
                                 <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <% 
-                       const pendingRequests = (overtimeRequests || []).filter(r => r.status === 'Pending');
-                       if (pendingRequests.length > 0) { 
-                           pendingRequests.forEach(request => { %>
-                            <tr>
+                <tbody id="overtimePendingBody">
+                    <% if (pendingRequests.length > 0) { %>
+                        <% pendingRequests.forEach(request => { %>
+                            <tr data-overtime-id="<%= request.id %>">
                                 <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">#<%= request.id.substring(0, 8) %></td>
                                 <td>
                                     <div style="font-weight: 700; color: var(--text-heading);"><%= request.employee %></div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);"><%= request.employeeId %></div>
                                 </td>
                                 <td style="color: var(--text-muted); font-size: 0.9rem;"><%= request.date %></td>
-                                <td style="font-weight: 800; color: var(--accent-indigo); font-family: monospace;"><%= request.hours %>h</td>
+                                <td style="font-weight: 800; color: var(--accent-indigo); font-family: monospace;"><%= request.hours === 'N/A' ? 'N/A' : `${request.hours}h` %></td>
                                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 0.85rem;" title="<%= request.reason %>"><%= request.reason %></td>
                                 <td class="text-right">
-                                    <span class="status-badge <%= statusClassMap[request.status] || 'status-default' %>"><%= request.status || 'Unknown' %></span>
+                                    <span class="status-badge <%= statusClassMap[request.otStatus || request.status] || 'status-default' %>"><%= request.otStatus || request.status || 'Unknown' %></span>
                                 </td>
                                 <td style="text-align: right;">
                                     <div class="table-action-group">
@@ -172,7 +177,7 @@
                             </tr>
                         <% }) %>
                     <% } else { %>
-                        <tr>
+                        <tr data-empty-state="true">
                             <td colspan="7" style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">No pending overtime requests found.</td>
                         </tr>
                     <% } %>
@@ -206,11 +211,11 @@
                         <th class="text-right" data-sortable="true">Timestamp</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="overtimeHistoryBody">
                     <% 
                        let allHistory = [];
-                       if (overtimeRequests && overtimeRequests.length > 0) {
-                           overtimeRequests.forEach(request => {
+                       if (allRequests.length > 0) {
+                           allRequests.forEach(request => {
                                if (request.history && request.history.length > 0) {
                                    request.history.forEach(h => {
                                        if (h.action === 'Approved' || h.action === 'Rejected') {
@@ -225,7 +230,7 @@
                                }
                            });
                        }
-                       allHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                       allHistory.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
                     %>
                     <% if (allHistory.length > 0) { %>
                         <% allHistory.forEach(item => { %>
@@ -243,7 +248,7 @@
                             </tr>
                         <% }) %>
                     <% } else { %>
-                        <tr>
+                        <tr data-empty-state="true">
                             <td colspan="4" style="padding: 3rem; text-align: center; color: var(--text-muted); font-style: italic;">No processing history available.</td>
                         </tr>
                     <% } %>

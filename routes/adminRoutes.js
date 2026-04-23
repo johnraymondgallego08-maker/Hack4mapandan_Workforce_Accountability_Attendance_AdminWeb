@@ -27,6 +27,43 @@ const upload = multer({
     }
 });
 
+function runSingleUpload(fieldName) {
+    const middleware = upload.single(fieldName);
+
+    return (req, res, next) => {
+        middleware(req, res, (error) => {
+            if (!error) {
+                return next();
+            }
+
+            const acceptsJson = String(req.headers.accept || '').includes('application/json');
+            let message = error.message || 'File upload failed.';
+
+            if (error instanceof multer.MulterError) {
+                if (error.code === 'LIMIT_FILE_SIZE') {
+                    message = 'Image is too large. Maximum size is 5 MB.';
+                }
+            }
+
+            if (acceptsJson) {
+                return res.status(400).json({ success: false, error: message });
+            }
+
+            if (req.flash) {
+                req.flash('error', message);
+            }
+
+            const fallbackRedirect = req.originalUrl.includes('/manage-events/edit/')
+                ? req.originalUrl
+                : req.originalUrl.includes('/manage-events')
+                    ? '/manage-events'
+                    : '/manage-users';
+
+            return res.redirect(fallbackRedirect);
+        });
+    };
+}
+
 router.use(authMiddleware.isAuthenticated);
 
 router.get("/manage-users", adminMiddleware.isAdmin, userController.manageUsers);
@@ -36,7 +73,7 @@ router.get('/users/edit/:id', adminMiddleware.isAdmin, userController.editUserPa
 router.post(
     '/users/edit/:id',
     adminMiddleware.isAdmin,
-    upload.single('profileImage'),
+    runSingleUpload('profileImage'),
     securityMiddleware.verifyCsrfToken,
     userController.updateUser
 );
@@ -54,14 +91,14 @@ router.get("/manage-events/edit/:id", adminMiddleware.isAdmin, eventAnnouncement
 router.post(
     "/manage-events/create",
     adminMiddleware.isAdmin,
-    upload.single('coverImage'),
+    runSingleUpload('coverImage'),
     securityMiddleware.verifyCsrfToken,
     eventAnnouncementController.createEvent
 );
 router.post(
     "/manage-events/edit/:id",
     adminMiddleware.isAdmin,
-    upload.single('coverImage'),
+    runSingleUpload('coverImage'),
     securityMiddleware.verifyCsrfToken,
     eventAnnouncementController.updateEvent
 );

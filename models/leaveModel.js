@@ -1,5 +1,6 @@
 const { db } = require('../config/firebaseAdmin');
 const userModel = require('./userModel');
+const APP_TIMEZONE = 'Asia/Manila';
 
 function toValidDate(value) {
     if (!value) return null;
@@ -15,6 +16,7 @@ function formatDateTime(value) {
     const date = toValidDate(value);
     if (!date) return null;
     return date.toLocaleString('en-US', {
+        timeZone: APP_TIMEZONE,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -45,8 +47,12 @@ exports.getAll = async () => {
         snapshot.forEach(doc => {
             const data = doc.data();
             const originalStartDate = data.startDate; // Keep raw date for sorting
-            if (data.startDate && data.startDate.toDate) data.startDate = data.startDate.toDate().toLocaleDateString();
-            if (data.endDate && data.endDate.toDate) data.endDate = data.endDate.toDate().toLocaleDateString();
+            if (data.startDate && data.startDate.toDate) {
+                data.startDate = data.startDate.toDate().toLocaleDateString('en-US', { timeZone: APP_TIMEZONE });
+            }
+            if (data.endDate && data.endDate.toDate) {
+                data.endDate = data.endDate.toDate().toLocaleDateString('en-US', { timeZone: APP_TIMEZONE });
+            }
 
             const requestDateSource = firstValidDate([
                 data.requestDate,

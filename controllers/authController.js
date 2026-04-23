@@ -1,6 +1,42 @@
 const { admin, db } = require('../config/firebaseAdmin');
 const securityMiddleware = require('../middlewares/securityMiddleware');
 
+function getLoginErrorResponse(error) {
+    const code = String(error && error.code ? error.code : '').trim();
+    const message = String(error && error.message ? error.message : '').trim();
+
+    if (code === 'auth/id-token-expired') {
+        return { status: 401, error: 'Your sign-in session expired. Please sign in again.' };
+    }
+
+    if (code === 'auth/id-token-revoked') {
+        return { status: 401, error: 'Your sign-in session was revoked. Please sign in again.' };
+    }
+
+    if (code === 'auth/invalid-id-token' || code === 'auth/argument-error') {
+        return { status: 401, error: 'The Firebase sign-in token is invalid for this deployment. Check that the client Firebase project matches the server Firebase Admin credentials.' };
+    }
+
+    if (
+        code === 'app/no-app' ||
+        code === 'app/invalid-credential' ||
+        message.toLowerCase().includes('invalid pem') ||
+        message.toLowerCase().includes('failed to parse private key')
+    ) {
+        return { status: 503, error: 'Firebase Admin is misconfigured on the server. Check FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in Vercel.' };
+    }
+
+    if (
+        code === 'auth/insufficient-permission' ||
+        code === 'permission-denied' ||
+        code === 'unavailable'
+    ) {
+        return { status: 503, error: 'Firebase is temporarily unavailable or missing required permissions. Please verify the service account and try again.' };
+    }
+
+    return { status: 500, error: 'An internal error occurred. Please try again later.' };
+}
+
 exports.loginPage = (req, res) => {
     // If user is already logged in, redirect to dashboard
     if (req.session.user) {
@@ -18,6 +54,12 @@ exports.registerPage = (req, res) => {
 
 exports.login = async (req, res) => {
     try {
+        if (!admin.apps.length || !db) {
+            return res.status(503).json({
+                error: 'Firebase Admin is not ready on the server. Check the Vercel Firebase Admin environment variables and redeploy.'
+            });
+        }
+
         // Aggressively extract device info from the request body (handling both camelCase and snake_case)
         const { idToken, deviceId, device_id, deviceName, device_name, deviceUsed, device_used, deviceUsage, hardwareSerial, serialCode } = req.body;
 
@@ -28,7 +70,7 @@ exports.login = async (req, res) => {
         console.log('[AUTH] Verifying ID token...');
         const decodedToken = await admin.auth().verifyIdToken(idToken, true); // Check for revoked/disabled status
         const uid = decodedToken.uid;
-        const email = decodedToken.email;
+        const email = decodedToken.email || '';
 
         console.log(`[AUTH] Token verified for UID: ${uid}`);
 
@@ -47,7 +89,7 @@ exports.login = async (req, res) => {
         const empData = empDoc.data() || {};
         const adminData = adminDoc.data() || {};
 
-        const displayName = adminData.name || empData.name || decodedToken.name || email.split('@')[0];
+        const displayName = adminData.name || empData.name || decodedToken.name || (email ? email.split('@')[0] : uid);
 
         // 2. Security Scan: Ensure the account is not suspended or inactive
         const accountStatus = (adminData.status || empData.status || 'Active').toLowerCase();
@@ -152,7 +194,8 @@ exports.login = async (req, res) => {
 
     } catch (error) {
         console.error('[AUTH] An unexpected error occurred during login:', error);
-        res.status(500).json({ error: 'An internal error occurred. Please try again later.' });
+        const response = getLoginErrorResponse(error);
+        res.status(response.status).json({ error: response.error });
     }
 };
 

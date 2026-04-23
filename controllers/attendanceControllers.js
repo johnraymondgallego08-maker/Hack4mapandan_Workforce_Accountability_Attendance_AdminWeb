@@ -8,6 +8,7 @@ const { db } = require('../config/firebaseAdmin');
 const fs = require('fs');
 const path = require('path');
 const EMPLOYEE_IMAGES_DIR = path.join(__dirname, '../public/employee_images');
+const APP_TIMEZONE = 'Asia/Manila';
 
 // Helper to safely parse dates
 function parseDate(dateInput) {
@@ -42,14 +43,36 @@ function getFirstDefinedValue(...values) {
 function formatTime(dateInput) {
     const date = parseDate(dateInput);
     if (!date) return null;
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('en-US', {
+        timeZone: APP_TIMEZONE,
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
 // Helper to format date
 function formatDate(dateInput) {
     const date = parseDate(dateInput);
     if (!date) return null;
-    return date.toLocaleDateString('en-US');
+    return date.toLocaleDateString('en-US', {
+        timeZone: APP_TIMEZONE,
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+}
+
+function startOfMonth(date) {
+    const monthStart = new Date(date);
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    return monthStart;
+}
+
+function endOfMonth(date) {
+    const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+    return monthEnd;
 }
 
 function normalizeImagePath(value) {
@@ -339,7 +362,7 @@ function getLocalEmployeeImages({ userId = '', name = '' } = {}) {
                 captures.push({
                     path: `/employee_images/${folder.name}/${fileName}`,
                     label: timestamp
-                        ? `Verification - ${timestamp.toLocaleDateString('en-US')} ${timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                        ? `Verification - ${formatDate(timestamp)} ${formatTime(timestamp)}`
                         : 'Verification',
                     timestamp
                 });
@@ -608,23 +631,82 @@ exports.dashboard = async (req, res) => {
         return acc;
     }, { processed: 0, pending: 0, total: 0 });
 
-    // --- NEW: Filter for upcoming holidays ---
-    const todayForHolidays = new Date();
+    const now = new Date();
+    const currentMonthStart = startOfMonth(now);
+    const currentMonthEnd = endOfMonth(now);
+    const todayForHolidays = new Date(now);
     todayForHolidays.setHours(0, 0, 0, 0);
-    const upcomingHolidays = allHolidays
+
+    const monthlyHolidays = allHolidays
         .map(holiday => {
             const parsedDate = parseDate(holiday.date);
             if (!parsedDate) return null;
+            const holidayDay = new Date(parsedDate);
+            holidayDay.setHours(0, 0, 0, 0);
+
+            let statusLabel = 'Upcoming';
+            if (holidayDay.getTime() < todayForHolidays.getTime()) {
+                statusLabel = 'Finished';
+            } else if (holidayDay.getTime() === todayForHolidays.getTime()) {
+                statusLabel = 'Today';
+            }
+
             return {
                 ...holiday,
                 date: parsedDate,
-                monthLabel: parsedDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-                dayLabel: parsedDate.getDate().toString().padStart(2, '0')
+                statusLabel,
+                isFinished: statusLabel === 'Finished',
+                monthLabel: parsedDate.toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, month: 'short' }).toUpperCase(),
+                dayLabel: parsedDate.getDate().toString().padStart(2, '0'),
+                fullDateLabel: parsedDate.toLocaleDateString('en-US', {
+                    timeZone: APP_TIMEZONE,
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })
             };
         })
-        .filter(holiday => holiday && holiday.date >= todayForHolidays)
-        .sort((a, b) => a.date - b.date)
-        .slice(0, 3); // Get the next 3 upcoming holidays
+        .filter(holiday => holiday && holiday.date >= currentMonthStart && holiday.date <= currentMonthEnd)
+        .sort((a, b) => a.date - b.date);
+
+    const weeklyLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayToIndexMap = {
+        1: 0,
+        2: 1,
+        3: 2,
+        4: 3,
+        5: 4,
+        6: 5,
+        0: 6
+    };
+    const overtimeHoursByDay = [0, 0, 0, 0, 0, 0, 0];
+
+    overtimeRequests.forEach((request) => {
+        const requestDate = parseDate(request._sortDate || request.actionDate || request.requestedDate || request.date);
+        if (!requestDate) return;
+
+        const hours = getNumericValue(request.hours);
+        const dayIndex = dayToIndexMap[requestDate.getDay()];
+        if (dayIndex === undefined) return;
+
+        overtimeHoursByDay[dayIndex] += hours;
+    });
+
+    const dashboardCharts = {
+        attendance: {
+            labels: ['Present', 'Active', 'Late', 'Absent'],
+            values: [
+                attendanceOverviewData.present || 0,
+                attendanceOverviewData.active || 0,
+                attendanceOverviewData.late || 0,
+                attendanceOverviewData.absent || 0
+            ]
+        },
+        overtime: {
+            labels: weeklyLabels,
+            values: overtimeHoursByDay.map(value => Number(value.toFixed(2)))
+        }
+    };
 
     res.render("dashboard", {
         currentAdmin: currentAdmin || req.session.user || null,
@@ -637,6 +719,14 @@ exports.dashboard = async (req, res) => {
         totalNetPay: payrollMetrics.total,
         payrollMetrics,
         holidays: upcomingHolidays,
+        totalNetPay: totalNetPaySum,
+        holidays: monthlyHolidays,
+        holidayMonthLabel: currentMonthStart.toLocaleDateString('en-US', {
+            timeZone: APP_TIMEZONE,
+            month: 'long',
+            year: 'numeric'
+        }),
+        dashboardCharts,
         employeeStatusList,
         attendanceOverviewData,
         events: dashboardEvents,
@@ -889,7 +979,7 @@ exports.imageRecognition = async (req, res) => {
 
             const ts = parseDate(data.timestamp || data.timeIn || data.date || doc.createTime);
             const label = ts
-                ? `Verification - ${ts.toLocaleDateString('en-US')} ${ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                ? `Verification - ${formatDate(ts)} ${formatTime(ts)}`
                 : 'Verification';
             const employeeName = String(
                 data.employeeName ||
