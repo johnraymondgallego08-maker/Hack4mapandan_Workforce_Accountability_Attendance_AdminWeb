@@ -450,7 +450,8 @@ exports.dashboard = async (req, res) => {
         allAttendance,
         payrollList,
         allHolidays,
-        logsSnapshot
+        logsSnapshot,
+        eventsSnapshot
     ] = await Promise.all([
         req.session && req.session.user ? userModel.getUserById(req.session.user.uid) : Promise.resolve(null),
         overtimeModel.getAll(),
@@ -459,8 +460,13 @@ exports.dashboard = async (req, res) => {
         attendanceModel.getAllAttendance(),
         payrollModel.getAllPayroll(),
         holidayModel.getAll(),
-        db.collection('logs').get()
+        db.collection('logs').get(),
+        db.collection('events_announcements').orderBy('createdAt', 'desc').limit(20).get().catch(() => ({ docs: [] }))
     ]);
+
+    const allEventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const dashboardEvents = allEventsData.filter(e => e.type === 'Event').slice(0, 5);
+    const dashboardAnnouncements = allEventsData.filter(e => e.type === 'Announcement').slice(0, 5);
 
     // --- DEDUPLICATION LOGIC ---
     // Filter out duplicate attendance records (same user, within 60 seconds)
@@ -575,20 +581,32 @@ exports.dashboard = async (req, res) => {
         String(user.status || '').toLowerCase() === 'suspended'
     ).length;
 
-    // Map individual payroll records and calculate total net pay for dashboard widget
-    const totalNetPaySum = payrollList.reduce((sum, p) => {
-        const val = getNumericValue(getFirstDefinedValue(
-            p.netPay,
-            p.netpay,
-            p.net_pay,
-            p.totalSalary,
-            p.total_salary,
-            p.amount,
-            p.salary,
-            0
+    // Calculate payroll metrics for the analytics chart
+    const payrollMetrics = payrollList.reduce((acc, p) => {
+        let val = getNumericValue(getFirstDefinedValue(
+            p.netPay, p.netpay, p.net_pay, p.totalSalary, p.total_salary, p.amount, p.salary, 0
         ));
-        return sum + val;
-    }, 0).toFixed(2);
+
+        // Fallback: Kung walang explicit netPay field (halimbawa pagkatapos i-edit), 
+        // i-calculate natin mula sa breakdown fields.
+        if (val === 0) {
+            const basic = getNumericValue(p.basic);
+            const bonus = getNumericValue(p.bonus);
+            const deductions = getNumericValue(p.deductions);
+            if (basic !== 0 || bonus !== 0 || deductions !== 0) {
+                val = basic + bonus - deductions;
+            }
+        }
+
+        const status = (p.status || 'Pending').toLowerCase();
+        if (status === 'processed') {
+            acc.processed += val;
+        } else {
+            acc.pending += val;
+        }
+        acc.total += val;
+        return acc;
+    }, { processed: 0, pending: 0, total: 0 });
 
     // --- NEW: Filter for upcoming holidays ---
     const todayForHolidays = new Date();
@@ -616,10 +634,13 @@ exports.dashboard = async (req, res) => {
         leaveRequests,
         recentActivity,
         payrollList, // Pass the original payrollList, as it should already contain netPay from the database
-        totalNetPay: totalNetPaySum,
+        totalNetPay: payrollMetrics.total,
+        payrollMetrics,
         holidays: upcomingHolidays,
         employeeStatusList,
-        attendanceOverviewData
+        attendanceOverviewData,
+        events: dashboardEvents,
+        announcements: dashboardAnnouncements
     });
 };
 

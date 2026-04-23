@@ -29,6 +29,14 @@ class TableManager {
         console.log(`[TABLE] Initialized table: ${this.tableId}`);
     }
 
+    getFilteredRows() {
+        const tbody = this.table.querySelector('tbody');
+        if (!tbody) return [];
+        return Array.from(tbody.querySelectorAll('tr')).filter(row => {
+            return row.getAttribute('data-filtered') !== 'true' && !row.hasAttribute('data-empty-state');
+        });
+    }
+
     setupSortableHeaders() {
         const thead = this.table.querySelector('thead');
         if (!thead) return;
@@ -151,6 +159,12 @@ class TableManager {
         const paginationId = `${this.tableId}-pagination`;
         let paginationControls = document.getElementById(paginationId);
 
+        // If not found by ID, look for a generic placeholder in the same card container
+        if (!paginationControls) {
+            const card = this.table.closest('.card');
+            paginationControls = card ? card.querySelector('.pagination-controls') : null;
+        }
+
         if (!paginationControls) {
             paginationControls = document.createElement('div');
             paginationControls.id = paginationId;
@@ -164,32 +178,36 @@ class TableManager {
                 border-top: 1px solid rgba(0,0,0,0.1);
                 padding-top: 1rem;
             `;
-
-            const prevBtn = document.createElement('button');
-            prevBtn.id = `${this.tableId}-prev`;
-            prevBtn.className = 'btn';
-            prevBtn.style.cssText = 'padding: 0.4rem 0.8rem; font-size: 0.9rem;';
-            prevBtn.innerHTML = '<i data-lucide="chevron-left" style="width:16px; height:16px; display:inline;"></i> Previous';
-            prevBtn.onclick = () => this.previousPage();
-
-            const pageInfo = document.createElement('span');
-            pageInfo.id = `${this.tableId}-page-info`;
-            pageInfo.style.cssText = 'margin: 0 0.5rem; font-size: 0.9rem; min-width: 120px; text-align: center;';
-            pageInfo.textContent = 'Page 1 of 1';
-
-            const nextBtn = document.createElement('button');
-            nextBtn.id = `${this.tableId}-next`;
-            nextBtn.className = 'btn';
-            nextBtn.style.cssText = 'padding: 0.4rem 0.8rem; font-size: 0.9rem;';
-            nextBtn.innerHTML = 'Next <i data-lucide="chevron-right" style="width:16px; height:16px; display:inline;"></i>';
-            nextBtn.onclick = () => this.nextPage();
-
-            paginationControls.appendChild(prevBtn);
-            paginationControls.appendChild(pageInfo);
-            paginationControls.appendChild(nextBtn);
-
             this.table.parentElement.insertBefore(paginationControls, this.table.nextSibling);
+        } else if (!paginationControls.id) {
+            paginationControls.id = paginationId;
         }
+
+        // Ensure the container is empty before injecting buttons to prevent duplicates
+        paginationControls.innerHTML = '';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.id = `${this.tableId}-prev`;
+        prevBtn.className = 'btn';
+        prevBtn.style.cssText = 'padding: 0.4rem 0.8rem; font-size: 0.9rem;';
+        prevBtn.innerHTML = '<i data-lucide="chevron-left" style="width:16px; height:16px; display:inline;"></i> Previous';
+        prevBtn.onclick = () => this.previousPage();
+
+        const pageInfo = document.createElement('span');
+        pageInfo.id = `${this.tableId}-page-info`;
+        pageInfo.style.cssText = 'margin: 0 0.5rem; font-size: 0.9rem; min-width: 120px; text-align: center;';
+        pageInfo.textContent = 'Page 1 of 1';
+
+        const nextBtn = document.createElement('button');
+        nextBtn.id = `${this.tableId}-next`;
+        nextBtn.className = 'btn';
+        nextBtn.style.cssText = 'padding: 0.4rem 0.8rem; font-size: 0.9rem;';
+        nextBtn.innerHTML = 'Next <i data-lucide="chevron-right" style="width:16px; height:16px; display:inline;"></i>';
+        nextBtn.onclick = () => this.nextPage();
+
+        paginationControls.appendChild(prevBtn);
+        paginationControls.appendChild(pageInfo);
+        paginationControls.appendChild(nextBtn);
 
         this.paginationControls = paginationControls;
     }
@@ -198,8 +216,8 @@ class TableManager {
         const tbody = this.table.querySelector('tbody');
         if (!tbody) return;
 
-        const rows = tbody.querySelectorAll('tr');
-        this.totalRows = rows.length;
+        const filteredRows = this.getFilteredRows();
+        this.totalRows = filteredRows.length;
 
         if (this.totalRows > this.itemsPerPage) {
             this.paginationControls.style.display = 'flex';
@@ -212,8 +230,9 @@ class TableManager {
 
     displayPage(pageNum) {
         const tbody = this.table.querySelector('tbody');
-        const rows = tbody.querySelectorAll('tr');
-        const totalPages = Math.ceil(this.totalRows / this.itemsPerPage);
+        const allRows = Array.from(tbody.querySelectorAll('tr'));
+        const filteredRows = this.getFilteredRows();
+        const totalPages = Math.ceil(filteredRows.length / this.itemsPerPage);
 
         if (pageNum < 1) pageNum = 1;
         if (pageNum > totalPages) pageNum = totalPages;
@@ -221,14 +240,14 @@ class TableManager {
         this.currentPage = pageNum;
 
         // Hide all rows
-        rows.forEach(row => row.style.display = 'none');
+        allRows.forEach(row => row.style.display = 'none');
 
         // Show only rows for current page
         const startIdx = (pageNum - 1) * this.itemsPerPage;
         const endIdx = startIdx + this.itemsPerPage;
 
-        for (let i = startIdx; i < endIdx && i < rows.length; i++) {
-            rows[i].style.display = '';
+        for (let i = startIdx; i < endIdx && i < filteredRows.length; i++) {
+            filteredRows[i].style.display = '';
         }
 
         // Update pagination info
@@ -274,6 +293,19 @@ class TableManager {
 
 // Global table manager instances
 window.tableManagers = {};
+
+// Global helper to initialize or update table management
+window.initTableManagement = function(tableSelector, searchSelector, paginationSelector, itemsPerPage, options = {}) {
+    const id = tableSelector.replace('#', '');
+    if (window.tableManagers[id]) {
+        window.tableManagers[id].itemsPerPage = itemsPerPage;
+        window.tableManagers[id].reinitialize();
+        return window.tableManagers[id];
+    }
+    const manager = new TableManager(id, { itemsPerPage, ...options });
+    window.tableManagers[id] = manager;
+    return manager;
+};
 
 // Initialize all tables on page load
 document.addEventListener('DOMContentLoaded', () => {

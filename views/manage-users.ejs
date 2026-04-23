@@ -1,3 +1,81 @@
+<%
+    // Extract unique values for filters
+    const roles = [...new Set(users.map(u => u.role).filter(Boolean))].sort();
+    const departments = [...new Set(users.map(u => u.department).filter(Boolean))].sort();
+    const positions = [...new Set(users.map(u => u.position).filter(Boolean))].sort();
+%>
+
+<style>
+    /* Filter and UI Enhancements */
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        width: 100%;
+        padding: 1.5rem 2rem;
+        background: #fff;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .filter-item {
+        height: 2.75rem;
+        padding: 0 0.75rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        background: #f9fafb;
+        color: #374151;
+        box-sizing: border-box;
+        flex: 1 1 140px;
+        min-width: 0;
+    }
+    .search-input-wrapper {
+        flex: 2 1 250px;
+        position: relative;
+    }
+    .btn-csv-red {
+        background: #dc2626;
+        color: white;
+        border: 1.5px solid transparent;
+        height: 2.75rem;
+        padding: 0 1.25rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        box-sizing: border-box;
+        flex: 0 0 auto;
+        margin-bottom: 1rem;
+    }
+    .btn-csv-red:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Sticky Header and Action Fix */
+    #usersTable { border-collapse: separate; border-spacing: 0; }
+    #usersTable thead th {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #f9fafb;
+    }
+    #usersTable th:last-child,
+    #usersTable td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 10;
+        background: #ffffff;
+    }
+    #usersTable thead th:last-child { z-index: 30; background: #f9fafb; }
+</style>
+
 <div class="page-container">
     <div class="page-header">
         <div>
@@ -11,12 +89,31 @@
     </div>
 
     <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
-        <div class="card-header">
+        <div class="card-header" style="padding: 1.5rem 2rem 0 2rem; border-bottom: none;">
             <h3>All System Users</h3>
-            <div class="search-wrapper">
-                <i data-lucide="search"></i>
-                <input type="text" id="searchInput" placeholder="Search Users...">
+        </div>
+        
+        <div class="filter-container">
+            <div class="search-input-wrapper">
+                <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; color: #9ca3af;"></i>
+                <input type="text" id="searchInput" placeholder="Search by name or email..." class="filter-item" style="width: 100%; padding-left: 2.75rem; background: white;">
             </div>
+            <select id="roleFilter" class="filter-item">
+                <option value="">All Roles</option>
+                <% roles.forEach(role => { %><option value="<%= role %>"><%= role %></option><% }) %>
+            </select>
+            <select id="deptFilter" class="filter-item">
+                <option value="">All Departments</option>
+                <% departments.forEach(dept => { %><option value="<%= dept %>"><%= dept %></option><% }) %>
+            </select>
+            <select id="posFilter" class="filter-item">
+                <option value="">All Positions</option>
+                <% positions.forEach(pos => { %><option value="<%= pos %>"><%= pos %></option><% }) %>
+            </select>
+            <button type="button" id="downloadCSV" class="btn-csv-red">
+                <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+                Export CSV
+            </button>
         </div>
 
         <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1120px;">
@@ -118,6 +215,80 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
+
+        const table = document.getElementById('usersTable');
+        const rows = table.querySelectorAll('tbody tr');
+        const searchInput = document.getElementById('searchInput');
+        const roleFilter = document.getElementById('roleFilter');
+        const deptFilter = document.getElementById('deptFilter');
+        const posFilter = document.getElementById('posFilter');
+        const csvBtn = document.getElementById('downloadCSV');
+
+        // Combined Filtering Logic
+        function applyFilters() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedRole = roleFilter.value;
+            const selectedDept = deptFilter.value;
+            const selectedPos = posFilter.value;
+
+            rows.forEach(row => {
+                if (row.cells.length < 5) return; // Skip empty state
+
+                const text = row.innerText.toLowerCase();
+                const rowRole = row.cells[1].textContent.trim();
+                const rowDept = row.cells[2].textContent.trim();
+                const rowPos = row.cells[3].textContent.trim();
+
+                const matchesSearch = text.includes(searchTerm) || rowRole.toLowerCase().includes(searchTerm);
+                const matchesRole = !selectedRole || rowRole === selectedRole;
+                const matchesDept = !selectedDept || rowDept === selectedDept;
+                const matchesPos = !selectedPos || rowPos === selectedPos;
+
+                const isVisible = matchesSearch && matchesRole && matchesDept && matchesPos;
+                row.setAttribute('data-filtered', isVisible ? 'false' : 'true');
+                row.style.display = isVisible ? "" : "none";
+            });
+
+            // Refresh pagination via the universal TableManager
+            if (window.tableManagers && window.tableManagers['usersTable']) {
+                window.tableManagers['usersTable'].reinitialize();
+            }
+        }
+
+        // Event Listeners
+        [searchInput, roleFilter, deptFilter, posFilter].forEach(el => {
+            el.addEventListener('input', applyFilters);
+        });
+
+        // CSV Export
+        csvBtn.addEventListener('click', () => {
+            const headers = Array.from(table.querySelectorAll('thead th'))
+                .slice(0, -1) // Remove "Actions"
+                .map(th => th.textContent.trim());
+
+            const csvData = [headers.join(',')];
+            
+            rows.forEach(row => {
+                const isFiltered = row.getAttribute('data-filtered') === 'true';
+                if (!isFiltered && row.cells.length > 1) {
+                    const rowData = Array.from(row.cells)
+                        .slice(0, -1)
+                        .map(cell => {
+                            let text = cell.innerText.replace(/(\r\n|\n|\r)/gm, " ").trim().replace(/"/g, '""');
+                            return `"${text}"`;
+                        });
+                    csvData.push(rowData.join(','));
+                }
+            });
+
+            const blob = new Blob([csvData.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', 'manage_user.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
 
         if (typeof initTableManagement === 'function') {
             initTableManagement('#usersTable', '#searchInput', '.pagination-controls', 8);

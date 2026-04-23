@@ -79,6 +79,7 @@ app.use(helmet({
             imgSrc: ["'self'", "data:", "blob:", "https:"],
             connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firestore.googleapis.com", "https://www.googleapis.com", "https://*.googleapis.com"],
             fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+            frameSrc: ["'self'", "https://calendar.google.com", "https://www.google.com"],
             objectSrc: ["'none'"],
             frameAncestors: ["'self'"],
             baseUri: ["'self'"],

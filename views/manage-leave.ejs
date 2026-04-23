@@ -46,6 +46,31 @@
         #historyTable td:nth-child(9) {
             white-space: nowrap;
         }
+
+        /* Sticky Header and Action Column Fix for Request History */
+        #historyTable {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        #historyTable thead th {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #ffffff;
+        }
+
+        #historyTable th:last-child,
+        #historyTable td:last-child {
+            position: sticky;
+            right: 0;
+            z-index: 10;
+            background: #ffffff;
+        }
+
+        #historyTable thead th:last-child {
+            z-index: 30;
+        }
     </style>
     <div class="page-header">
         <div>
@@ -67,15 +92,35 @@
 
         <!-- Pending Requests Section -->
         <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem; margin-bottom: 2rem;">
-            <div class="card-header">
+            <div class="card-header" style="padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 1.25rem; background: #fff; border-bottom: 1px solid #f3f4f6;">
                 <h3>Pending Applications</h3>
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; width: 100%;">
+                    <div class="search-wrapper" style="position: relative;">
+                        <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; color: #9ca3af;"></i>
+                        <input type="text" id="pendingSearchInput" placeholder="Search pending names or reasons..." style="width: 100%; padding: 0.75rem 0.75rem 0.75rem 2.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.9rem;">
+                    </div>
+                    <select id="pendingEmployeeFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
+                        <option value="">All Employees</option>
+                        <% const pEmps = [...new Set(pendingLeaves.map(l => l.employeeName))].sort(); %>
+                        <% pEmps.forEach(emp => { %>
+                            <option value="<%= emp %>"><%= emp %></option>
+                        <% }) %>
+                    </select>
+                    <select id="pendingTypeFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
+                        <option value="">All Types</option>
+                        <% const pTypes = [...new Set(pendingLeaves.map(l => l.leaveType || l.type))].sort(); %>
+                        <% pTypes.forEach(type => { %>
+                            <option value="<%= type %>"><%= type %></option>
+                        <% }) %>
+                    </select>
+                </div>
             </div>
             <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1180px;">
                 <table id="pendingLeavesTable">
                     <thead>
                         <tr>
-                            <th style="white-space: nowrap;" data-sortable="true">Employee</th>
-                            <th style="white-space: nowrap;" data-sortable="true">Type</th>
+                            <th style="white-space: nowrap;">Employee</th>
+                            <th style="white-space: nowrap;">Type</th>
                             <th style="white-space: nowrap; text-align: right;" data-sortable="true">Requested On</th>
                             <th style="white-space: nowrap; text-align: right;" data-sortable="true">
                                 Start Date</th>
@@ -158,18 +203,38 @@
 
         <!-- History Section -->
         <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
-            <div class="card-header">
-                <h3>Request History</h3>
-                <div class="filter-group">
-                    <select id="statusFilter" data-status-column="7">
+            <div class="card-header" style="padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 1.25rem; background: #fff; border-bottom: 1px solid #f3f4f6;">
+                <div>
+                    <h3 style="margin: 0;">Request History</h3>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem; width: 100%; align-items: center;">
+                    <div class="search-wrapper" style="position: relative; flex: 2 1 250px; min-width: 0;">
+                        <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; color: #9ca3af;"></i>
+                        <input type="text" id="historySearchInput" placeholder="Search history..." style="width: 100%; height: 2.75rem; padding: 0 0.75rem 0 2.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.9rem; box-sizing: border-box;">
+                    </div>
+                    <select id="historyEmployeeFilter" style="flex: 1 1 150px; min-width: 0; height: 2.75rem; padding: 0 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151; font-size: 0.9rem; box-sizing: border-box;">
+                        <option value="">All Employees</option>
+                        <% const hEmps = [...new Set(historyLeaves.map(l => l.employeeName))].sort(); %>
+                        <% hEmps.forEach(emp => { %>
+                            <option value="<%= emp %>"><%= emp %></option>
+                        <% }) %>
+                    </select>
+                    <select id="historyTypeFilter" style="flex: 1 1 150px; min-width: 0; height: 2.75rem; padding: 0 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151; font-size: 0.9rem; box-sizing: border-box;">
+                        <option value="">All Types</option>
+                        <% const hTypes = [...new Set(historyLeaves.map(l => l.leaveType || l.type))].sort(); %>
+                        <% hTypes.forEach(type => { %>
+                            <option value="<%= type %>"><%= type %></option>
+                        <% }) %>
+                    </select>
+                    <select id="statusFilter" style="flex: 1 1 150px; min-width: 0; height: 2.75rem; padding: 0 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151; font-size: 0.9rem; box-sizing: border-box;">
                         <option value="">All Status</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>
                     </select>
-                    <div class="search-wrapper">
-                        <i data-lucide="search"></i>
-                        <input type="text" id="searchInput" placeholder="Search history...">
-                    </div>
+                    <button type="button" id="exportHistoryCSV" style="flex: 0 0 auto; background: #dc2626; color: white; border: 1.5px solid transparent; height: 2.75rem; padding: 0 1.25rem; margin-bottom: 1rem; border-radius: 10px; font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; box-sizing: border-box;" onmouseover="this.style.opacity='0.9'; this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)'">
+                        <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+                        Export CSV
+                    </button>
                 </div>
             </div>
             <div class="table-responsive"
@@ -271,8 +336,95 @@
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
 
+        // Generic Filtering Function
+        function applyTableFilters(tableId, searchInputId, empFilterId, typeFilterId, statusFilterId = null) {
+            const searchTerm = document.getElementById(searchInputId).value.toLowerCase();
+            const selectedEmp = document.getElementById(empFilterId).value;
+            const selectedType = document.getElementById(typeFilterId).value;
+            const selectedStatus = statusFilterId ? document.getElementById(statusFilterId).value.toLowerCase() : null;
+            
+            const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+
+            rows.forEach(row => {
+                if (row.hasAttribute('data-empty-state') || row.cells.length < 5) return;
+
+                const empName = row.cells[0].textContent.trim();
+                const leaveType = row.cells[1].textContent.trim();
+                const reason = row.cells[5].textContent.trim().toLowerCase();
+                const status = statusFilterId ? row.cells[7].textContent.trim().toLowerCase() : null;
+
+                const matchesSearch = empName.toLowerCase().includes(searchTerm) || reason.includes(searchTerm);
+                const matchesEmp = !selectedEmp || empName === selectedEmp;
+                const matchesType = !selectedType || leaveType === selectedType;
+                const matchesStatus = !selectedStatus || status === selectedStatus;
+
+                const isVisible = matchesSearch && matchesEmp && matchesType && matchesStatus;
+                row.setAttribute('data-filtered', isVisible ? 'false' : 'true');
+                row.style.display = isVisible ? '' : 'none';
+            });
+
+            if (window.tableManagers && window.tableManagers[tableId]) {
+                window.tableManagers[tableId].reinitialize();
+            }
+        }
+
+        // CSV Export Functionality for Request History
+        function exportTableToCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            const rows = Array.from(table.querySelectorAll('tr'));
+            const csvContent = rows
+                .filter(row => row.getAttribute('data-filtered') !== 'true' && !row.hasAttribute('data-empty-state'))
+                .map(row => {
+                    const cells = Array.from(row.querySelectorAll('th, td'));
+                    // Exclude the 'Actions' column (last column index 8)
+                    return cells.slice(0, -1).map(cell => {
+                        let text = cell.innerText.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim();
+                        // Escape double quotes by doubling them
+                        text = text.replace(/"/g, '""');
+                        return `"${text}"`;
+                    }).join(',');
+                })
+                .filter(rowStr => rowStr.trim().length > 0)
+                .join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        document.getElementById('exportHistoryCSV').addEventListener('click', () => {
+            exportTableToCSV('historyTable', `leave-history-${new Date().toISOString().split('T')[0]}.csv`);
+        });
+
+        // Pending Listeners
+        const pendingInputs = ['pendingSearchInput', 'pendingEmployeeFilter', 'pendingTypeFilter'];
+        pendingInputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                applyTableFilters('pendingLeavesTable', 'pendingSearchInput', 'pendingEmployeeFilter', 'pendingTypeFilter');
+            });
+        });
+
+        // History Listeners
+        const historyInputs = ['historySearchInput', 'historyEmployeeFilter', 'historyTypeFilter', 'statusFilter'];
+        historyInputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                applyTableFilters('historyTable', 'historySearchInput', 'historyEmployeeFilter', 'historyTypeFilter', 'statusFilter');
+            });
+        });
+
+        // Existing table management for pagination/etc
         if (typeof initTableManagement === 'function') {
-            initTableManagement('#historyTable', '#searchInput', '.pagination-controls', 8, {
+            initTableManagement('#historyTable', '#historySearchInput', '.pagination-controls', 8, {
                 statusFilterSelector: '#statusFilter'
             });
         }

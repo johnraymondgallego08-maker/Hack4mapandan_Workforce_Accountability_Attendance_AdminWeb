@@ -2,95 +2,164 @@
     <div class="page-header" style="margin-bottom: 2rem;">
         <div>
             <h1>User Profile & Directory</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Manage your account details and view the system-wide employee directory.</p>
+            <!-- <p style="color: var(--text-muted); font-size: 0.9rem;">Manage your account details and view the system-wide employee directory.</p> -->
         </div>
     </div>
 
-    <!-- Profile Section -->
-    <div class="card" style="padding: 2.5rem; margin-bottom: 3rem; background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.05), transparent);">
-        <div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2rem;">
-            <!-- Profile Image Section -->
-            <div class="relative">
-                <div style="width: 140px; height: 140px; border-radius: 50%; overflow: hidden; border: 4px solid var(--border-glass); box-shadow: var(--shadow-glow); background: var(--surface-glass); display: flex; align-items: center; justify-content: center;">
+    <!-- Profile Management Section -->
+    <div class="profile-grid-container" style="display: grid; grid-template-columns: 350px 1fr; gap: 2rem; margin-bottom: 3rem; align-items: start;">
+        
+        <!-- Left Card: Profile Display -->
+        <div class="card" style="padding: 2.5rem 1.5rem; background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%); color: white; border: none; text-align: center; position: sticky; top: 2rem;">
+            <div class="profile-avatar-wrapper" style="position: relative; display: inline-block; margin-bottom: 1.5rem;">
+                <div style="width: 150px; height: 150px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.25); overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.25); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto;">
                     <% if (user.photoUrl || user.profileImage) { %>
                         <img id="profilePreview" src="<%= user.photoUrl || user.profileImage %>" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">
                     <% } else { %>
-                        <div style="background: var(--primary-gradient); color: white; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 3.5rem; font-weight: 800;">
-                            <%= user.name ? user.name.charAt(0).toUpperCase() : 'U' %>
-                        </div>
+                        <span style="font-size: 3.5rem; font-weight: 800;"><%= user.name ? user.name.charAt(0).toUpperCase() : 'U' %></span>
                     <% } %>
+                </div>
+                <label for="profileImage" style="position: absolute; bottom: 5px; right: 5px; background: white; color: #7c3aed; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                    <i data-lucide="camera" style="width: 18px;"></i>
+                </label>
+            </div>
+
+            <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 0.25rem; letter-spacing: -0.025em;"><%= user.name %></h2>
+            <p style="font-size: 0.95rem; opacity: 0.9; font-weight: 500; margin-bottom: 2rem; text-transform: uppercase; letter-spacing: 0.05em;"><%= user.position || 'Employee' %></p>
+            
+            <div style="width: 40px; height: 3px; background: rgba(255,255,255,0.3); margin: 0 auto 2rem; border-radius: 2px;"></div>
+            
+            <div style="text-align: left; display: flex; flex-direction: column; gap: 1.25rem; padding: 0 0.5rem;">
+                <div style="display: flex; align-items: flex-start; gap: 0.85rem;">
+                    <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 12px; backdrop-filter: blur(4px);">
+                        <i data-lucide="building-2" style="width: 18px; height: 18px;"></i>
+                    </div>
+                    <div style="overflow: hidden;">
+                        <span style="display: block; font-size: 0.65rem; text-transform: uppercase; opacity: 0.7; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 2px;">Department</span>
+                        <span style="font-weight: 600; font-size: 0.95rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= user.department || 'General' %></span>
+                    </div>
+                </div>
+                
+                <div style="display: flex; align-items: flex-start; gap: 0.85rem;">
+                    <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 12px; backdrop-filter: blur(4px);">
+                        <i data-lucide="mail" style="width: 18px; height: 18px;"></i>
+                    </div>
+                    <div style="overflow: hidden;">
+                        <span style="display: block; font-size: 0.65rem; text-transform: uppercase; opacity: 0.7; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 2px;">Email Address</span>
+                        <span style="font-weight: 600; font-size: 0.95rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= user.email %></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Card: Form Settings -->
+        <div class="card" style="padding: 2.5rem; background: white;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.5rem; border-bottom: 1px solid #f3f4f6; padding-bottom: 1.5rem;">
+                <div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #111827; letter-spacing: -0.01em;">Account Settings</h3>
+                    <p style="color: #6b7280; font-size: 0.875rem; margin-top: 2px;">Update your personal profile and system credentials.</p>
+                </div>
+                <div style="background: #f5f3ff; color: #7c3aed; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
+                    Admin Access
                 </div>
             </div>
 
-            <!-- Update Profile Form -->
-            <form action="/update-profile" method="POST" enctype="multipart/form-data" style="width: 100%; max-width: 700px;">
+            <form action="/update-profile" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                <div style="display: flex; justify-content: center; margin-bottom: 2.5rem;">
-                    <label for="profileImage" class="btn" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: pointer; border: 1px solid var(--border-glass);">
-                        <i data-lucide="camera" style="width: 16px; height: 16px;"></i>
-                        <span>Change Photo</span>
+                <input type="file" id="profileImage" name="profileImage" class="hidden" accept="image/*" onchange="previewAndSubmit(this)">
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; margin-bottom: 2rem;">
+                    <div class="form-group">
+                        <label class="label-upper" style="color: #4b5563; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.6rem; display: block; letter-spacing: 0.05em;">Display Name</label>
+                        <input type="text" name="name" value="<%= user.name %>" required style="width: 100%; padding: 0.875rem; border-radius: 10px; border: 1.5px solid #e5e7eb; background: #fbfcfd; font-weight: 500; transition: border-color 0.2s;">
+                    </div>
+                    <div class="form-group">
+                        <label class="label-upper" style="color: #4b5563; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.6rem; display: block; letter-spacing: 0.05em;">Email Address</label>
+                        <input type="email" name="email" value="<%= user.email %>" required style="width: 100%; padding: 0.875rem; border-radius: 10px; border: 1.5px solid #e5e7eb; background: #fbfcfd; font-weight: 500;">
+                    </div>
+                    <div class="form-group">
+                        <label class="label-upper" style="color: #4b5563; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.6rem; display: block; letter-spacing: 0.05em;">Department</label>
+                        <input type="text" name="department" value="<%= user.department || '' %>" placeholder="e.g. IT Operations" style="width: 100%; padding: 0.875rem; border-radius: 10px; border: 1.5px solid #e5e7eb; background: #fbfcfd; font-weight: 500;">
+                    </div>
+                    <div class="form-group">
+                        <label class="label-upper" style="color: #4b5563; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.6rem; display: block; letter-spacing: 0.05em;">Position</label>
+                        <input type="text" name="position" value="<%= user.position || '' %>" placeholder="e.g. Senior Administrator" style="width: 100%; padding: 0.875rem; border-radius: 10px; border: 1.5px solid #e5e7eb; background: #fbfcfd; font-weight: 500;">
+                    </div>
+                </div>
+
+                <div style="padding: 1.5rem; background: #fef2f2; border-radius: 12px; border: 1px solid #fee2e2; margin-bottom: 2.5rem;">
+                    <label class="label-upper" style="color: #991b1b; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.6rem; display: block; letter-spacing: 0.05em;">
+                        Update Password
+                        <span style="font-weight: 400; text-transform: none; opacity: 0.7; margin-left: 6px;">(Leave blank to keep current)</span>
                     </label>
-                    <input type="file" id="profileImage" name="profileImage" class="hidden" accept="image/*" onchange="previewAndSubmit(this)">
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Display Name</label>
-                        <input type="text" name="name" value="<%= user.name %>" required style="width: 100%;">
+                    <div style="position: relative;">
+                        <i data-lucide="lock" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; color: #991b1b; opacity: 0.5;"></i>
+                        <input type="password" name="password" placeholder="Enter new secure password" style="width: 100%; padding: 0.875rem 0.875rem 0.875rem 2.75rem; border-radius: 10px; border: 1.5px solid #fecaca; background: white; font-weight: 500;">
                     </div>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Email Address</label>
-                        <input type="email" name="email" value="<%= user.email %>" required style="width: 100%;">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Department</label>
-                        <input type="text" name="department" value="<%= user.department || '' %>" placeholder="IT, HR, etc." style="width: 100%;">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Position</label>
-                        <input type="text" name="position" value="<%= user.position || '' %>" placeholder="Manager, Developer..." style="width: 100%;">
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <label class="label-upper">New Password <span style="font-weight: 400; text-transform: none; opacity: 0.5;">(Leave blank to keep current)</span></label>
-                    <input type="password" name="password" placeholder="••••••••" style="width: 100%;">
                 </div>
 
                 <input type="hidden" name="uid" value="<%= user.id %>">
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-weight: 700; letter-spacing: 0.02em;">
-                    Save Profile Settings
-                </button>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" onclick="window.location.reload()" class="btn" style="padding: 0.875rem 1.5rem; background: #f3f4f6; color: #4b5563; border: none; font-weight: 700; border-radius: 10px;">Discard</button>
+                    <button type="submit" class="btn btn-primary" style="padding: 0.875rem 2.5rem; border-radius: 10px; background: #7c3aed; border: none; font-weight: 800; color: white; box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.3);">
+                        Save Changes
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 
     <!-- Directory Section -->
-    <div class="card" style="padding: 0; overflow: hidden; border-radius: 2rem;">
-        <div class="card-header">
-            <h3>Employee Directory</h3>
-            <div class="search-wrapper">
-                <i data-lucide="search"></i>
-                <input type="text" id="dirSearchInput" placeholder="Find Employee...">
+    <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div class="card-header" style="padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 1.5rem; background: #fff; border-bottom: 1px solid #f3f4f6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: #111827;">Employee Directory</h3>
+                <button id="exportCsvBtn" class="btn" style="background: #ef4444; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; cursor: pointer;">
+                    <i data-lucide="download" style="width: 16px;"></i>
+                    Export CSV
+                </button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; width: 100%;">
+                <div class="search-wrapper" style="position: relative;">
+                    <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; color: #9ca3af;"></i>
+                    <input type="text" id="dirSearchInput" placeholder="Search by name or email..." style="width: 100%; padding: 0.75rem 0.75rem 0.75rem 2.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.9rem;">
+                </div>
+                <select id="roleFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
+                    <option value="">All Roles</option>
+                    <% const roles = [...new Set(employees.map(e => e.role))].sort(); %>
+                    <% roles.forEach(role => { %><option value="<%= role %>"><%= role %></option><% }) %>
+                </select>
+                <select id="deptFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
+                    <option value="">All Departments</option>
+                    <% const depts = [...new Set(employees.map(e => e.department).filter(d => d))].sort(); %>
+                    <% depts.forEach(dept => { %><option value="<%= dept %>"><%= dept %></option><% }) %>
+                </select>
             </div>
         </div>
         <div class="table-responsive">
-            <table id=\"employeeDirectoryTable\">
-                <thead>
+            <table id="employeeDirectoryTable" style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #ffffff; color: white;">
                     <tr>
-                        <th data-sortable=\"true\">Employee</th>
-                        <th data-sortable=\"true\">Role</th>
-                        <th data-sortable=\"true\">Department</th>
-                        <th data-sortable=\"true\">Status</th>
-                        <th style="text-align: right;">Actions</th>
+                        <th style="padding: 1rem 1.5rem; text-align: left; font-weight: 700; color: #4b5563;">
+                            Employee
+                        </th>
+                        <th style="padding: 1rem 1.5rem; text-align: left; font-weight: 700; color: #4b5563;">
+                            Role
+                        </th>
+                        <th style="padding: 1rem 1.5rem; text-align: left; font-weight: 700; color: #4b5563;">
+                            Department
+                        </th>
+                        <th style="padding: 1rem 1.5rem; text-align: left; font-weight: 700;">Status</th>
+                        <th style="padding: 1rem 1.5rem; text-align: right; font-weight: 700;">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="directoryTableBody">
                     <% if (locals.employees && employees.length > 0) { %>
                         <% employees.forEach(emp => { %>
-                            <tr>
-                                <td>
+                            <tr style="border-bottom: 1px solid #f3f4f6; transition: background 0.2s;">
+                                <td style="padding: 1rem 1.5rem;" data-search="<%= emp.name %> <%= emp.email %>">
                                     <div style="display: flex; align-items: center; gap: 1rem;">
                                         <div style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 2px solid var(--border-glass); background: var(--surface-glass); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                                             <% if (emp.profileImage) { %>
@@ -105,15 +174,15 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td style="color: var(--text-muted); font-size: 0.9rem;"><%= emp.role %></td>
-                                <td style="color: var(--text-muted); font-size: 0.9rem;"><%= emp.department || '-' %></td>
-                                <td>
+                                <td style="padding: 1rem 1.5rem; color: #4b5563; font-size: 0.9rem;"><%= emp.role %></td>
+                                <td style="padding: 1rem 1.5rem; color: #4b5563; font-size: 0.9rem;"><%= emp.department || '-' %></td>
+                                <td style="padding: 1rem 1.5rem;">
                                     <% let statusClass = emp.status === 'Active' ? 'status-present' : 'status-default'; %>
                                     <span class="status-badge <%= statusClass %>"><%= emp.status %></span>
                                 </td>
-                                <td style="text-align: right;">
-                                    <a href="/users/edit/<%= emp.id %>" class="btn-action" title="Edit">
-                                        <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
+                                <td style="padding: 1rem 1.5rem; text-align: right;">
+                                    <a href="/users/edit/<%= emp.id %>" class="btn-action" title="Edit" style="color: #ef4444; background: #fee2e2; padding: 6px; border-radius: 6px; display: inline-flex;">
+                                        <i data-lucide="edit-3" style="width: 16px; height: 16px;"></i>
                                     </a>
                                 </td>
                             </tr>
@@ -130,25 +199,76 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => { lucide.createIcons(); });
+    document.addEventListener('DOMContentLoaded', () => { 
+        lucide.createIcons(); 
+
+        const searchInput = document.getElementById('dirSearchInput');
+        const roleFilter = document.getElementById('roleFilter');
+        const deptFilter = document.getElementById('deptFilter');
+        const exportBtn = document.getElementById('exportCsvBtn');
+
+        // Combined Filtering Logic (Search + Role + Department)
+        function applyFilters() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedRole = roleFilter.value;
+            const selectedDept = deptFilter.value;
+            const rows = document.querySelectorAll('#directoryTableBody tr');
+
+            rows.forEach(row => {
+                // Skip the "No employees found" row if it exists
+                if (row.cells.length < 5) return;
+
+                const searchData = row.cells[0].getAttribute('data-search').toLowerCase();
+                const roleValue = row.cells[1].textContent.trim();
+                const deptValue = row.cells[2].textContent.trim();
+
+                const matchesSearch = searchData.includes(searchTerm);
+                const matchesRole = !selectedRole || roleValue === selectedRole;
+                const matchesDept = !selectedDept || deptValue === selectedDept;
+
+                row.style.display = (matchesSearch && matchesRole && matchesDept) ? '' : 'none';
+            });
+        }
+
+        // Event Listeners for instant combined filtering
+        if (searchInput) searchInput.addEventListener('input', applyFilters);
+        if (roleFilter) roleFilter.addEventListener('change', applyFilters);
+        if (deptFilter) deptFilter.addEventListener('change', applyFilters);
+
+        // CSV Export Logic
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const rows = Array.from(document.querySelectorAll('#directoryTableBody tr'))
+                    .filter(row => row.style.display !== 'none' && row.cells.length >= 5);
+                
+                let csv = 'Name,Email,Role,Department,Status\n';
+                
+                rows.forEach(row => {
+                    const name = row.querySelector('div[style*="font-weight: 700"]').textContent.trim();
+                    const email = row.querySelector('div[style*="font-size: 0.75rem"]').textContent.trim();
+                    const role = row.cells[1].textContent.trim();
+                    const dept = row.cells[2].textContent.trim();
+                    const status = row.cells[3].textContent.trim();
+                    
+                    csv += `"${name}","${email}","${role}","${dept}","${status}"\n`;
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', 'employee_directory.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }
+    });
 
     function previewAndSubmit(input) {
         const file = input.files[0];
         if (!file) return;
         const preview = document.getElementById('profilePreview');
-        if (preview) {
-            preview.src = URL.createObjectURL(file);
-        }
+        if (preview) preview.src = URL.createObjectURL(file);
         input.form.submit();
-    }
-
-    const searchInput = document.getElementById('dirSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('keyup', (e) => {
-            const term = e.target.value.toLowerCase();
-            document.querySelectorAll('tbody tr').forEach(row => {
-                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
-            });
-        });
     }
 </script>

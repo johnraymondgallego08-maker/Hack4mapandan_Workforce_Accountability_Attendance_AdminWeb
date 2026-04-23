@@ -86,6 +86,14 @@ router.get("/attendance-monitor", adminMiddleware.isAdmin, attendanceController.
 router.get("/attendance/summary", adminMiddleware.isAdmin, attendanceController.attendanceSummaryEmployee);
 router.get("/attendance/add", adminMiddleware.isAdmin, attendanceController.addAttendancePage);
 router.post("/attendance/add", adminMiddleware.isAdmin, attendanceController.storeAttendance);
+router.get("/attendance/edit/:id", adminMiddleware.isAdmin, attendanceController.editAttendancePage);
+router.post("/attendance/edit/:id", adminMiddleware.isAdmin, attendanceController.updateAttendance);
+router.post("/attendance/delete/:id", adminMiddleware.isAdmin, attendanceController.deleteAttendance);
+
+// Edit and Delete Routes - Siguraduhin na ang attendanceController ay mayroon nitong mga function
+router.get("/attendance/edit/:id", adminMiddleware.isAdmin, attendanceController.editAttendancePage);
+router.post("/attendance/edit/:id", adminMiddleware.isAdmin, attendanceController.updateAttendance);
+router.post("/attendance/delete/:id", adminMiddleware.isAdmin, attendanceController.deleteAttendance);
 
 router.get("/device-recognition", attendanceController.deviceRecognition);
 router.get("/image-recognition", attendanceController.imageRecognition);
