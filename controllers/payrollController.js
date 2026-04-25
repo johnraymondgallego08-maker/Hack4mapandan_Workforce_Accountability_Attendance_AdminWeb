@@ -843,13 +843,17 @@ exports.updatePayroll = async (req, res) => {
         const employeeId = String(req.body.employeeId || req.query.employeeId || '').trim();
         const { basic, bonus, deductions, status } = req.body;
         const payrollBeforeUpdate = await payrollModel.getById(req.params.id, employeeId);
+        
+        const basicVal = parseFloat(basic) || 0;
+        const bonusVal = parseFloat(bonus) || 0;
+        const deductionVal = parseFloat(deductions) || 0;
+        const netPayVal = basicVal + bonusVal - deductionVal;
+
         const updateData = {
-            basic: parseFloat(basic) || 0,
-            bonus: parseFloat(bonus) || 0,
-            deductions: parseFloat(deductions) || 0,
-            // Assuming netPay is recalculated on the client or in a Cloud Function
-            // If you want to recalculate here:
-            // netPay: (parseFloat(basic) || 0) + (parseFloat(bonus) || 0) - (parseFloat(deductions) || 0),
+            basic: basicVal,
+            bonus: bonusVal,
+            deductions: deductionVal,
+            netPay: netPayVal,
             status: status
         };
         await payrollModel.update(req.params.id, updateData, employeeId);
@@ -891,7 +895,29 @@ exports.processPayroll = async (req, res) => {
             return res.redirect('/manage-payroll');
         }
 
-        await payrollModel.updateStatus(req.params.id, 'Processed', employeeId);
+        // Calculate actual netPay before processing
+        let finalNetPay = getPayrollAmountValue(payroll);
+        const updatePayload = { status: 'Processed' };
+        // Include existing basic, bonus, deductions so payrollModel.update can use them
+        updatePayload.basic = getNumericValue(payroll.basic);
+        updatePayload.bonus = getNumericValue(payroll.bonus);
+        updatePayload.deductions = getNumericValue(payroll.deductions);
+        
+        // Kung 0 ang netPay, subukang kalkulahin mula sa basic/bonus/deductions o dailyHistory
+        if (finalNetPay === 0) {
+            const basic = parseFloat(payroll.basic) || 0;
+            const bonus = parseFloat(payroll.bonus) || 0;
+            const deductions = parseFloat(payroll.deductions) || 0;
+            finalNetPay = basic + bonus - deductions;
+
+            if (finalNetPay === 0 && payroll.dailyHistory) {
+                finalNetPay = sumDailyHistoryAmounts(payroll.dailyHistory);
+            }
+        }
+
+        updatePayload.netPay = finalNetPay;
+        await payrollModel.update(req.params.id, updatePayload, employeeId);
+        
         await addPayrollLog(req, 'Payroll Processed', {
             id: req.params.id,
             employeeId: payroll.employeeId || employeeId,

@@ -5,12 +5,93 @@
         'Pending': 'status-late',
         'Pending Approval': 'status-late'
     };
+
+    // Extract unique IDs and Employees for filters
+    const uniqueIds = [...new Set((overtimeRequests || []).filter(r => r.status === 'Pending').map(r => r.id.substring(0, 8)))].sort();
+    const uniqueEmployees = [...new Set((overtimeRequests || []).filter(r => r.status === 'Pending').map(r => r.employee))].sort();
     const allRequests = overtimeRequests || [];
     const pendingRequests = allRequests.filter(request => {
         const status = String(request.otStatus || request.status || '').trim().toLowerCase();
         return status === 'pending approval' || status === 'pending';
     });
 %>
+<style>
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        width: 100%;
+    }
+    .filter-item {
+        height: 2.75rem;
+        padding: 0 0.75rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        background: #f9fafb;
+        color: #374151;
+        box-sizing: border-box;
+        flex: 1 1 150px;
+        min-width: 0;
+    }
+    .search-input-wrapper {
+        flex: 2 1 250px;
+        position: relative;
+    }
+    .btn-csv-red {
+        background: #dc2626;
+        color: white;
+        border: 1.5px solid transparent;
+        height: 2.75rem;
+        padding: 0 1.25rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        box-sizing: border-box;
+        margin-bottom: 1rem;
+    }
+    .btn-csv-red:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Sticky Header and Action Column Fix */
+    #overtimeTable, #historyTable {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    #overtimeTable thead th,
+    #historyTable thead th {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #f9fafb; /* Matches standard header background */
+    }
+
+    #overtimeTable th:last-child,
+    #overtimeTable td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 10;
+        background: #ffffff; /* Solid background to prevent overlap during horizontal scroll */
+    }
+
+    /* Ensure the sticky header for Actions stays above other sticky cells */
+    #overtimeTable thead th:last-child {
+        z-index: 30;
+        background: #f9fafb;
+    }
+</style>
+
 <div class="page-container">
     <div class="page-header">
         <div>
@@ -22,17 +103,33 @@
     <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
         <div class="card-header">
             <h3>Request Logs</h3>
-            <div class="filter-group">
-                <select id="statusFilter" data-status-column="5">
+            <div class="filter-container">
+                <div class="search-input-wrapper">
+                    <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; color: #9ca3af;"></i>
+                    <input type="text" id="searchInput" placeholder="Find Request..." class="filter-item" style="width: 100%; padding-left: 2.75rem; background: white;">
+                </div>
+                <select id="idFilter" class="filter-item">
+                    <option value="">All IDs</option>
+                    <% uniqueIds.forEach(id => { %>
+                        <option value="#<%= id %>">#<%= id %></option>
+                    <% }) %>
+                </select>
+                <select id="employeeFilter" class="filter-item">
+                    <option value="">All Employees</option>
+                    <% uniqueEmployees.forEach(emp => { %>
+                        <option value="<%= emp %>"><%= emp %></option>
+                    <% }) %>
+                </select>
+                <select id="statusFilter" class="filter-item">
                     <option value="all">All Status</option>
                     <option value="approved">Approved</option>
                     <option value="pending">Pending</option>
                     <option value="rejected">Rejected</option>
                 </select>
-                <div class="search-wrapper">
-                    <i data-lucide="search"></i>
-                    <input type="text" id="searchInput" placeholder="Find Request...">
-                </div>
+                <button type="button" id="downloadCSV" class="btn-csv-red">
+                    <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+                    Export CSV
+                </button>
             </div>
         </div>
         <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1080px;">
@@ -94,9 +191,15 @@
 
     <!-- Overtime Action History Table -->
     <div class="card" style="margin-top: 2rem; padding: 0; overflow: hidden; border-radius: 1.5rem;">
-        <div class="card-header">
-            <h3>Request History</h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Logs of approved and rejected requests</p>
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div>
+                <h3 style="margin: 0;">Request History</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Logs of approved and rejected requests</p>
+            </div>
+            <button type="button" id="exportHistoryCSV" class="btn-csv-red" style="margin-bottom: 0;">
+                <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+                Export CSV
+            </button>
         </div>
         <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1080px;">
             <table id="historyTable">
@@ -159,11 +262,113 @@
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
 
-        if (typeof initTableManagement === 'function') {
-            initTableManagement('#overtimeTable', '#searchInput', '.pagination-controls', 8, {
-                statusFilterSelector: '#statusFilter'
+        const table = document.getElementById('overtimeTable');
+        const rows = table.querySelectorAll('tbody tr');
+        const searchInput = document.getElementById('searchInput');
+        const idFilter = document.getElementById('idFilter');
+        const employeeFilter = document.getElementById('employeeFilter');
+        const statusFilter = document.getElementById('statusFilter');
+        const csvBtn = document.getElementById('downloadCSV');
+
+        // Combined Filtering Logic
+        function applyFilters() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedId = idFilter.value;
+            const selectedEmp = employeeFilter.value;
+            const selectedStatus = statusFilter.value.toLowerCase();
+
+            rows.forEach(row => {
+                // Skip empty state row
+                if (row.cells.length < 5) return;
+
+                const rowId = row.cells[0].textContent.trim();
+                const rowEmp = row.cells[1].textContent.trim();
+                const rowStatus = row.cells[5].textContent.trim().toLowerCase();
+                const rowFullText = row.innerText.toLowerCase();
+
+                const matchesSearch = rowFullText.includes(searchTerm);
+                const matchesId = !selectedId || rowId.includes(selectedId);
+                const matchesEmp = !selectedEmp || rowEmp === selectedEmp;
+                const matchesStatus = selectedStatus === 'all' || rowStatus === selectedStatus;
+
+                const isVisible = matchesSearch && matchesId && matchesEmp && matchesStatus;
+                row.setAttribute('data-filtered', isVisible ? 'false' : 'true');
+                row.style.display = isVisible ? "" : "none";
+            });
+
+            // Notify TableManager to update pagination if applicable
+            if (window.tableManagers && window.tableManagers['overtimeTable']) {
+                window.tableManagers['overtimeTable'].reinitialize();
+            }
+        }
+
+        // Event Listeners for Instant Updates
+        [searchInput, idFilter, employeeFilter, statusFilter].forEach(el => {
+            el.addEventListener('input', applyFilters);
+        });
+
+        // CSV Export Logic
+        csvBtn.addEventListener('click', () => {
+            const headers = Array.from(table.querySelectorAll('thead th'))
+                .slice(0, -1) // Remove "Actions"
+                .map(th => th.textContent.trim());
+
+            const csvData = [headers.join(',')];
+            
+            rows.forEach(row => {
+                const isFiltered = row.getAttribute('data-filtered') === 'true';
+                if (!isFiltered && row.cells.length > 1) {
+                    const rowData = Array.from(row.cells)
+                        .slice(0, -1) // Remove "Actions"
+                        .map(cell => {
+                            let text = cell.textContent.trim().replace(/"/g, '""');
+                            return `"${text}"`;
+                        });
+                    csvData.push(rowData.join(','));
+                }
+            });
+
+            const blob = new Blob([csvData.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', 'request_logs_employee.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // History Table CSV Export Logic
+        const historyCsvBtn = document.getElementById('exportHistoryCSV');
+        if (historyCsvBtn) {
+            historyCsvBtn.addEventListener('click', () => {
+                const historyTable = document.getElementById('historyTable');
+                const headers = Array.from(historyTable.querySelectorAll('thead th'))
+                    .map(th => th.textContent.trim());
+
+                const csvData = [headers.join(',')];
+                const historyRows = historyTable.querySelectorAll('tbody tr');
+                
+                historyRows.forEach(row => {
+                    // Export only rows that are not empty state and handle pagination display states
+                    if (row.cells.length > 1 && row.style.display !== 'none') {
+                        const rowData = Array.from(row.cells).map(cell => {
+                            let text = cell.textContent.trim().replace(/"/g, '""');
+                            return `"${text}"`;
+                        });
+                        csvData.push(rowData.join(','));
+                    }
+                });
+
+                const blob = new Blob([csvData.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', 'overtime_history.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             });
         }
+
         if (typeof initTableManagement === 'function') { initTableManagement('#historyTable', null, null, 10); }
     });
 </script>

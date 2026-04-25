@@ -1,3 +1,67 @@
+<style>
+    /* Privacy Blur Styles */
+    .blurred-image {
+        filter: blur(20px);
+        transition: filter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: scale(1.05); /* Slight scale to prevent edge bleed */
+    }
+
+    .blurred-image.revealed {
+        filter: blur(0);
+        transform: scale(1);
+    }
+
+    /* Reveal Confirmation Modal */
+    .reveal-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+        padding: 1.5rem;
+    }
+
+    .reveal-modal-content {
+        background: var(--surface-glass, #ffffff);
+        border: 1px solid var(--border-glass, rgba(255,255,255,0.1));
+        border-radius: 1.25rem;
+        padding: 2rem;
+        max-width: 400px;
+        width: 100%;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        text-align: center;
+    }
+
+    .reveal-btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        font-size: 0.9rem;
+    }
+
+    .reveal-btn-yes {
+        background: var(--primary-gradient, #4f46e5);
+        color: white;
+    }
+
+    .reveal-btn-no {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-heading, #fff);
+        margin-left: 0.5rem;
+    }
+
+    .reveal-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+</style>
+
 <div class="page-container">
     <div class="page-header">
         <div>
@@ -56,11 +120,12 @@
                                         data-photo-key="<%= photo.photoKey || '' %>"
                                         data-lightbox-label='<%- JSON.stringify(`${user.name || "Employee"} - ${photo.label}`) %>'
                                         style="position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-glass); cursor: pointer; padding: 0; background: transparent; width: 100%;">
-                                        <img src="<%= photo.path %>" alt="<%= photo.label %>" loading="lazy"
+                                        <img src="<%= photo.path %>" alt="<%= photo.label %>" loading="lazy" class="blurred-image"
                                             data-photo-key="<%= photo.photoKey || '' %>"
                                             data-fallbacks='<%- JSON.stringify(photo.sources || [photo.path]) %>'
                                             style="width: 100%; height: 160px; object-fit: cover; display: block; transition: transform 0.3s;"
-                                            onerror="handleImageFallback(this)">
+                                            onerror="handleImageFallback(this)"
+                                        >
                                         <div
                                             style="position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem 0.75rem; background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);">
                                             <% if (String(photo.label || '').toLowerCase().includes('profile')) { %>
@@ -104,6 +169,21 @@
             </p>
         </div>
     <% } %>
+</div>
+
+<!-- Reveal Confirmation Modal -->
+<div id="reveal-modal-overlay" class="reveal-modal-overlay">
+    <div class="reveal-modal-content">
+        <div style="margin-bottom: 1.5rem; color: var(--accent-indigo, #6366f1);">
+            <i data-lucide="eye-off" style="width: 48px; height: 48px; margin: 0 auto;"></i>
+        </div>
+        <h3 style="margin-bottom: 0.5rem; color: var(--text-heading);">View Profile Image?</h3>
+        <p style="margin-bottom: 2rem; color: var(--text-muted); font-size: 0.9rem;">Do you want to see the image?</p>
+        <div style="display: flex; justify-content: center; gap: 0.75rem;">
+            <button type="button" id="confirm-reveal-yes" class="reveal-btn reveal-btn-yes">Yes, Reveal</button>
+            <button type="button" id="confirm-reveal-no" class="reveal-btn reveal-btn-no">No</button>
+        </div>
+    </div>
 </div>
 
 <div id="lightbox"
@@ -219,6 +299,12 @@
         const lightboxImage = document.getElementById('lightbox-img');
         const lightboxClose = document.getElementById('lightbox-close');
         const resolvedSourceCache = readResolvedSourceCache();
+        
+        // Reveal Modal Elements
+        const revealModal = document.getElementById('reveal-modal-overlay');
+        const confirmYes = document.getElementById('confirm-reveal-yes');
+        const confirmNo = document.getElementById('confirm-reveal-no');
+        let pendingImage = null;
 
         const dedupeRenderedCards = () => {
             document.querySelectorAll('.employee-folder').forEach((folder) => {
@@ -264,18 +350,52 @@
             });
         }
 
+        // Reveal Modal Handlers
+        const closeRevealModal = () => {
+            revealModal.style.display = 'none';
+            pendingImage = null;
+        };
+
+        confirmYes.addEventListener('click', () => {
+            if (pendingImage) {
+                pendingImage.classList.remove('blurred-image');
+                pendingImage.classList.add('revealed');
+            }
+            closeRevealModal();
+        });
+
+        confirmNo.addEventListener('click', closeRevealModal);
+        
+        revealModal.addEventListener('click', (e) => {
+            if (e.target === revealModal) closeRevealModal();
+        });
+
         document.querySelectorAll('.image-card-button').forEach((button) => {
             button.addEventListener('click', (event) => {
                 event.stopPropagation();
-                let label = 'Employee photo';
-                try {
-                    label = JSON.parse(button.dataset.lightboxLabel || '"Employee photo"');
-                } catch (error) {
-                    label = button.dataset.lightboxLabel || 'Employee photo';
+                const img = button.querySelector('img');
+
+                // If image is still blurred, prompt for reveal
+                if (img && img.classList.contains('blurred-image') && !img.classList.contains('revealed')) {
+                    pendingImage = img;
+                    revealModal.style.display = 'flex';
+                    return;
                 }
-                openLightboxFromCard(button, label);
+
+                // Otherwise, open standard lightbox
+                openStandardLightbox(button);
             });
         });
+
+        function openStandardLightbox(button) {
+            let label = 'Employee photo';
+            try {
+                label = JSON.parse(button.dataset.lightboxLabel || '"Employee photo"');
+            } catch (error) {
+                label = button.dataset.lightboxLabel || 'Employee photo';
+            }
+            openLightboxFromCard(button, label);
+        }
 
         document.querySelectorAll('.image-card-button img').forEach((image) => {
             const key = getImageKey(image);

@@ -65,8 +65,8 @@
 
             <aside class="sidebar">
                 <div class="sidebar-brand">
-                    <h2>Admin</h2>
-                    <span>Secure operations workspace</span>
+                    <h2>LGU Admin Panel</h2>
+                    <span>Workforce Accountability & Attendance</span>
                 </div>
 
                 <% if (user) { %>
@@ -161,8 +161,24 @@
             </aside>
 
             <main class="content" id="main-content" tabindex="-1">
-                <div class="top-clock-row" style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                    <div id="digital-clock" class="clock-widget" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem; background: var(--surface-glass); padding: 0.5rem 1rem; border-radius: 2rem; border: 1px solid var(--border-glass);"></div>
+                <div class="top-clock-row" style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <% if (user) { %>
+                        <a href="/user-info" class="admin-pill" style="display: flex; align-items: center; gap: 0.65rem; text-decoration: none; font-weight: 700; color: var(--text-muted); font-size: 0.9rem; background: var(--surface-glass); padding: 0.35rem 1.15rem 0.35rem 0.35rem; border-radius: 2rem; border: 1px solid var(--border-glass); transition: all 0.2s ease;">
+                            <div class="admin-pill__avatar" style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border: 1px solid var(--border-glass);">
+                                <% if (user.photoUrl || user.profileImage) { %>
+                                    <img src="<%= user.photoUrl || user.profileImage %>" alt="Admin" style="width: 100%; height: 100%; object-fit: cover;">
+                                <% } else { %>
+                                    <span><%= (user.name || user.email || 'A').charAt(0).toUpperCase() %></span>
+                                <% } %>
+                            </div>
+                            <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                                <span style="font-size: 0.62rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Signed in as</span>
+                                <span style="white-space: nowrap;"><%= user.name || 'Administrator' %></span>
+                            </div>
+                            <i data-lucide="chevron-right" style="width: 14px; height: 14px; opacity: 0.5;"></i>
+                        </a>
+                    <% } %>
+                    <div id="digital-clock" class="clock-widget" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem; background: var(--surface-glass); padding: 0.5rem 1rem; border-radius: 2rem; border: 1px solid var(--border-glass); min-width: 110px; text-align: center;"></div>
                 </div>
 
                 <%- body %>

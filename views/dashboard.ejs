@@ -8,8 +8,11 @@
     const payrollEstimate = typeof totalNetPay !== 'undefined' ? totalNetPay : 0;
     const suspendedCount = typeof suspendedEmployees !== 'undefined' ? suspendedEmployees : 0;
     const workforcePulse = typeof employeeStatusList !== 'undefined' ? employeeStatusList : [];
+    const payrollData = typeof payrollMetrics !== 'undefined' ? payrollMetrics : { processed: 0, pending: 0 };
     const activityFeed = typeof recentActivity !== 'undefined' ? recentActivity : [];
     const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
+    const dashboardEvents = typeof events !== 'undefined' ? events : [];
+    const dashboardAnnouncements = typeof announcements !== 'undefined' ? announcements : [];
     const currentHolidayMonthLabel = typeof locals.holidayMonthLabel !== 'undefined' ? locals.holidayMonthLabel : '';
     const currentDashboardCharts = typeof locals.dashboardCharts !== 'undefined' ? locals.dashboardCharts : {};
     const attendanceChartData = currentDashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
@@ -17,45 +20,6 @@
 %>
 
 <div class="dashboard-shell">
-    <section class="dashboard-hero">
-        <div class="dashboard-hero__intro">
-            <span class="dashboard-hero__eyebrow">Admin Operations Center</span>
-            <h1 class="dashboard-hero__title">System Overview</h1>
-            <p class="dashboard-hero__subtitle">Real-time workforce activity, approvals, payroll visibility, and admin health for <%= todayLabel %>.</p>
-
-            <div class="dashboard-hero__highlights">
-                <div class="dashboard-hero__chip">
-                    <i data-lucide="sparkles"></i>
-                    <span><%= workforceCount %> active records in view</span>
-                </div>
-                <div class="dashboard-hero__chip">
-                    <i data-lucide="shield-check"></i>
-                    <span>Unified admin workflow</span>
-                </div>
-            </div>
-        </div>
-
-        <% if (typeof currentAdmin !== 'undefined' && currentAdmin) { %>
-            <a href="/user-info" class="dashboard-admin-card">
-                <div class="dashboard-admin-card__avatar">
-                    <% if (currentAdmin.photoUrl || currentAdmin.profileImage) { %>
-                        <img src="<%= currentAdmin.photoUrl || currentAdmin.profileImage %>" alt="<%= currentAdmin.name || 'Admin' %>">
-                    <% } else { %>
-                        <span><%= (currentAdmin.name || 'A').charAt(0).toUpperCase() %></span>
-                    <% } %>
-                </div>
-                <div class="dashboard-admin-card__content">
-                    <span class="dashboard-admin-card__label">Signed In As</span>
-                    <strong class="dashboard-admin-card__name"><%= currentAdmin.name || currentAdmin.email || 'Administrator' %></strong>
-                    <span class="dashboard-admin-card__meta"><%= currentAdmin.email || 'Admin Account' %></span>
-                </div>
-                <div class="dashboard-admin-card__action">
-                    <i data-lucide="arrow-up-right"></i>
-                </div>
-            </a>
-        <% } %>
-    </section>
-
     <section class="dashboard-metrics">
         <a href="/manage-users" class="metric-card">
             <div class="metric-card__icon">
@@ -168,7 +132,7 @@
             <div class="analytics-grid">
                 <div class="analytics-card">
                     <div class="analytics-card__header">
-                        <span>Workforce Participation</span>
+                        <span>Workforce Status Breakdown</span>
                     </div>
                     <div class="analytics-card__canvas">
                         <canvas id="attendanceChart"></canvas>
@@ -177,10 +141,20 @@
 
                 <div class="analytics-card">
                     <div class="analytics-card__header">
+                        <span>Approval Pipeline (Pending)</span>
                         <span>Overtime Request Hours</span>
                     </div>
                     <div class="analytics-card__canvas">
                         <canvas id="overtimeChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="analytics-card" style="grid-column: 1 / -1;">
+                    <div class="analytics-card__header">
+                        <span>Payroll Distribution (₱)</span>
+                    </div>
+                    <div class="analytics-card__canvas">
+                        <canvas id="payrollChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -243,20 +217,80 @@
             </div>
         </div>
 
-        <div class="dashboard-panel dashboard-panel--holidays">
+        <!-- Google Calendar Section -->
+        <div class="dashboard-panel dashboard-panel--calendar" style="grid-column: span 1;">
             <div class="card-header">
+                <h3>Workforce Calendar</h3>
+                <div class="dashboard-live-badge">
+                    <i data-lucide="calendar" style="width: 14px; margin-right: 4px;"></i>
+                    Live
+                </div>
+            </div>
+
+            <div class="calendar-container" style="padding: 1rem; background: #fff; border-radius: 12px; overflow: hidden;">
+                <iframe 
+                    src="https://calendar.google.com/calendar/embed?height=400&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FManila&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTzs=0&src=ZW4ucGhpbGlwcGluZXMjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%237c3aed" 
+                    style="border:0; border-radius: 8px;" 
+                    width="100%" 
+                    height="400" 
+                    frameborder="0" 
+                    scrolling="no">
+                </iframe>
                 <h3>Holidays This Month</h3>
                 <span style="font-size: 0.85rem; color: var(--text-muted);"><%= currentHolidayMonthLabel || '' %></span>
             </div>
+        </div>
+    </section>
 
-            <div class="holiday-list">
-                <% if (upcomingHolidays.length > 0) { %>
-                    <% upcomingHolidays.forEach(holiday => { %>
-                        <div class="holiday-item">
-                            <div class="holiday-item__date">
-                                <span><%= holiday.monthLabel || 'N/A' %></span>
-                                <strong><%= holiday.dayLabel || '00' %></strong>
+    <!-- Events and Announcements Section -->
+    <section class="dashboard-comms" style="margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <!-- Left Side: Events -->
+        <div class="dashboard-panel">
+            <div class="card-header">
+                <h3>Latest Events</h3>
+                <a href="/manage-events" class="dashboard-panel__cta">View All</a>
+            </div>
+            <div class="pulse-list">
+                <% if (dashboardEvents.length > 0) { %>
+                    <% dashboardEvents.forEach(event => { %>
+                        <div class="pulse-item">
+                            <div class="person-pill">
+                                <div class="person-pill__avatar" style="background: var(--primary-light); color: var(--primary);">
+                                    <i data-lucide="party-popper" style="width: 18px;"></i>
+                                </div>
+                                <div class="person-pill__content">
+                                    <strong><%= event.title %></strong>
+                                    <span><%= event.scheduleLabel || 'No date set' %></span>
+                                </div>
                             </div>
+                            <span class="status-badge status-present">Upcoming</span>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="dashboard-empty-state" style="padding: 2rem;">No upcoming events.</div>
+                <% } %>
+            </div>
+        </div>
+
+        <!-- Right Side: Announcements -->
+        <div class="dashboard-panel">
+            <div class="card-header">
+                <h3>Announcements</h3>
+            </div>
+            <div class="pulse-list">
+                <% if (dashboardAnnouncements.length > 0) { %>
+                    <% dashboardAnnouncements.forEach(ann => { %>
+                        <div class="pulse-item">
+                            <div class="person-pill">
+                                <div class="person-pill__avatar" style="background: #fff7ed; color: #ea580c;">
+                                    <i data-lucide="megaphone" style="width: 18px;"></i>
+                                </div>
+                                <div class="person-pill__content">
+                                    <strong><%= ann.title %></strong>
+                                    <span style="display: block; width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        <%= ann.summary %>
+                                    </span>
+                                </div>
                             <div class="holiday-item__content">
                                 <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
                                 <span><%= holiday.type || 'Holiday' %> • <%= holiday.statusLabel || 'Upcoming' %></span>
@@ -264,12 +298,31 @@
                         </div>
                     <% }) %>
                 <% } else { %>
+                    <div class="dashboard-empty-state" style="padding: 2rem;">No new announcements.</div>
                     <div class="dashboard-empty-state">No holidays found for this month.</div>
                 <% } %>
             </div>
         </div>
     </section>
 </div>
+
+<style>
+    /* Para sa responsive layout ng events at announcements */
+    @media (max-width: 1024px) {
+        .dashboard-comms {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    
+    /* Pag-align sa style ng Google Calendar iframe */
+    .calendar-container iframe {
+        filter: contrast(0.9) saturate(1.1);
+    }
+
+    .dashboard-panel--calendar {
+        margin-bottom: 0;
+    }
+</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -280,6 +333,10 @@
         new Chart(ctx1, {
             type: 'doughnut',
             data: {
+                labels: ['Active', 'Suspended', 'Absent'],
+                datasets: [{
+                    data: [<%= attendanceOverviewData.active %>, <%= suspendedCount %>, <%= attendanceOverviewData.absent %>],
+                    backgroundColor: ['#7c3aed', '#dc2626', '#e4def8'],
                 labels: <%- JSON.stringify(attendanceChartData.labels) %>,
                 datasets: [{
                     data: <%- JSON.stringify(attendanceChartData.values) %>,
@@ -313,8 +370,43 @@
         gradient.addColorStop(1, '#c4b5fd');
 
         new Chart(ctx2, {
+            type: 'pie',
+            data: {
+                labels: ['Pending Overtime', 'Pending Leaves'],
+                datasets: [{
+                    data: [<%= pendingOvertime %>, <%= pendingLeaves %>],
+                    backgroundColor: ['#3b82f6', '#d97706'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#756f86',
+                            usePointStyle: true,
+                            padding: 18,
+                            font: { family: 'Outfit', size: 11, weight: '700' }
+                        }
+                    }
+                }
+            }
+        });
+
+        const ctx3 = document.getElementById('payrollChart').getContext('2d');
+        new Chart(ctx3, {
             type: 'bar',
             data: {
+                labels: ['Processed', 'Pending'],
+                datasets: [{
+                    label: 'Amount (₱)',
+                    data: [<%= payrollData.processed %>, <%= payrollData.pending %>],
+                    backgroundColor: ['#10b981', '#f59e0b'],
+                    borderRadius: 6,
+                    maxBarThickness: 100
                 labels: <%- JSON.stringify(overtimeChartData.labels) %>,
                 datasets: [{
                     label: 'Overtime Hours',
@@ -330,8 +422,12 @@
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: 'rgba(109, 40, 217, 0.08)', drawBorder: false },
-                        ticks: { color: '#756f86', font: { family: 'Outfit', weight: '600' } }
+                        grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false },
+                        ticks: { 
+                            color: '#756f86',
+                            font: { family: 'Outfit', weight: '600', size: 10 },
+                            callback: function(value) { return '₱' + value.toLocaleString(); }
+                        }
                     },
                     x: {
                         grid: { display: false },
@@ -339,7 +435,10 @@
                     }
                 },
                 plugins: {
-                    legend: { display: false }
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: (context) => ' ₱' + context.raw.toLocaleString() }
+                    }
                 }
             }
         });

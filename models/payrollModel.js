@@ -463,6 +463,10 @@ exports.update = async (id, data, employeeId = '') => {
             const basic = parseFloat(data.basic) || 0;
             const bonus = parseFloat(data.bonus) || 0;
             const deductions = parseFloat(data.deductions) || 0;
+            
+            // Prioritize netPay if explicitly provided, otherwise calculate from breakdown
+            const calculatedNetPay = (data.netPay !== undefined && data.netPay !== null) 
+                                     ? parseFloat(data.netPay) || 0 : (basic + bonus - deductions);
             const netPay = basic + bonus - deductions;
             const status = normalizePayrollStatus(data.status || existing.status);
             const updatedAt = new Date();
@@ -471,6 +475,10 @@ exports.update = async (id, data, employeeId = '') => {
                 basic,
                 bonus,
                 deductions,
+                netPay: calculatedNetPay,
+                netpay: calculatedNetPay, // Keep both for compatibility
+                status: data.status || 'Pending',
+                updatedAt: new Date()
                 netPay,
                 netpay: netPay,
                 status,
