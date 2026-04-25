@@ -1,8 +1,12 @@
+<%
+    const safePublishedRecords = Array.isArray(typeof publishedRecords !== 'undefined' ? publishedRecords : null) ? publishedRecords : [];
+    const safeDraftRecords = Array.isArray(typeof draftRecords !== 'undefined' ? draftRecords : null) ? draftRecords : [];
+%>
 <div class="page-container" style="max-width: 1400px; margin: 0 auto;">
     <div class="page-header" style="margin-bottom: 1.25rem; display:flex; justify-content:space-between; align-items:center;">
         <div>
             <h1>Manage Events & Announcements</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Create, publish, and organize event records stored in Firestore.</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;"></p>
         </div>
     </div>
 
@@ -70,13 +74,13 @@
             <div class="card" style="padding:1rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:0.75rem;">
                     <h3 style="margin:0;">Published Records</h3>
-                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= Array.isArray(publishedRecords) ? publishedRecords.length : 0 %> record(s)</span>
+                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= safePublishedRecords.length %> record(s)</span>
                 </div>
-                <div id="publishedEmptyState" style="<%= Array.isArray(publishedRecords) && publishedRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
+                <div id="publishedEmptyState" style="<%= safePublishedRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
                     No published events or announcements yet.
                 </div>
                 <div style="width:100%; overflow-x:auto;">
-                    <table id="publishedEventsTable" style="width:100%; border-collapse:collapse; <%= Array.isArray(publishedRecords) && publishedRecords.length ? '' : 'display:none;' %>">
+                    <table id="publishedEventsTable" style="width:100%; border-collapse:collapse; <%= safePublishedRecords.length ? '' : 'display:none;' %>">
                         <thead>
                             <tr>
                                 <th style="text-align:left; padding:0.5rem;">Title</th>
@@ -119,13 +123,13 @@
             <div class="card" style="padding:1rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:0.75rem;">
                     <h3 style="margin:0;">Draft Records</h3>
-                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= Array.isArray(draftRecords) ? draftRecords.length : 0 %> record(s)</span>
+                    <span style="color:var(--text-muted); font-size:0.9rem;"><%= safeDraftRecords.length %> record(s)</span>
                 </div>
-                <div id="draftEmptyState" style="<%= Array.isArray(draftRecords) && draftRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
+                <div id="draftEmptyState" style="<%= safeDraftRecords.length ? 'display:none;' : '' %> color:var(--text-muted);">
                     No draft records waiting for publication.
                 </div>
                 <div style="width:100%; overflow-x:auto;">
-                    <table id="draftEventsTable" style="width:100%; border-collapse:collapse; <%= Array.isArray(draftRecords) && draftRecords.length ? '' : 'display:none;' %>">
+                    <table id="draftEventsTable" style="width:100%; border-collapse:collapse; <%= safeDraftRecords.length ? '' : 'display:none;' %>">
                         <thead>
                             <tr>
                                 <th style="text-align:left; padding:0.5rem;">Title</th>
@@ -136,7 +140,7 @@
                             </tr>
                         </thead>
                         <tbody id="draftEventsTableBody">
-                            <% (draftRecords || []).forEach(function(record) { %>
+                            <% safeDraftRecords.forEach(function(record) { %>
                                 <tr data-record-id="<%= record.id %>" data-record-status="<%= record.status %>" data-title="<%= record.title %>" data-date="<%= record.eventDate ? new Date(record.eventDate.toDate ? record.eventDate.toDate() : record.eventDate).getTime() : 0 %>">
                                     <td style="padding:0.5rem; vertical-align:middle;">
                                         <strong><%= record.title %></strong><br>

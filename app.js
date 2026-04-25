@@ -235,6 +235,7 @@ app.post(
     '/update-profile',
     authMiddleware.isAuthenticated,
     upload.single('profileImage'),
+    securityMiddleware.verifyCsrfToken,
     userController.updateProfile
 );
 

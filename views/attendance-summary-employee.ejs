@@ -1,3 +1,7 @@
+<%
+    const attendanceEmployeeName = typeof employeeName !== 'undefined' ? employeeName : 'Employee';
+    const attendanceRecords = Array.isArray(typeof records !== 'undefined' ? records : []) ? records : [];
+%>
 <div class="page-container">
     <div class="page-header">
         <div>
@@ -5,7 +9,7 @@
                 <a href="/attendance-monitor" style="color: var(--text-muted);"><i data-lucide="arrow-left" style="width: 20px;"></i></a>
                 <h1>Attendance Summary</h1>
             </div>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Detailed performance report for <strong><%= employeeName %></strong></p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Detailed performance report for <strong><%= attendanceEmployeeName %></strong></p>
         </div>
     </div>
 
@@ -46,8 +50,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <% if (locals.records && records.length > 0) { %>
-                        <% records.forEach(record => { %>
+                    <% if (attendanceRecords.length > 0) { %>
+                        <% attendanceRecords.forEach(record => { %>
                             <tr>
                                 <td class="mono-text accent-info"><%= record.timeIn || 'N/A' %></td>
                                 <td class="mono-text accent-info"><%= record.timeOut || 'N/A' %></td>

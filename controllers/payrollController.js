@@ -41,6 +41,10 @@ function getFirstDefinedValue(...values) {
     return 0;
 }
 
+function wantsJson(req) {
+    return req.xhr || String(req.headers.accept || '').includes('application/json');
+}
+
 function getPayrollAmountValue(record = {}) {
     return getNumericValue(getFirstDefinedValue(
         record.netPay,
@@ -69,6 +73,31 @@ function sumDailyHistoryAmounts(dailyHistory = []) {
     if (!Array.isArray(dailyHistory) || dailyHistory.length === 0) return 0;
     const total = dailyHistory.reduce((sum, day) => sum + getNumericValue(day && day.amount), 0);
     return Number(total.toFixed(2));
+}
+
+function rebalanceDailyHistoryAmounts(dailyHistory = [], totalAmount = 0) {
+    if (!Array.isArray(dailyHistory) || dailyHistory.length === 0) return [];
+
+    const normalizedEntries = dailyHistory.map((day) => ({
+        ...day,
+        hours: Number(getNumericValue(day && day.hours).toFixed(2))
+    }));
+
+    const totalCents = Math.round(getNumericValue(totalAmount) * 100);
+    const perDayCents = Math.trunc(totalCents / normalizedEntries.length);
+    let remainder = totalCents - (perDayCents * normalizedEntries.length);
+
+    return normalizedEntries.map((day) => {
+        const adjustment = remainder === 0 ? 0 : (remainder > 0 ? 1 : -1);
+        if (adjustment !== 0) {
+            remainder -= adjustment;
+        }
+
+        return {
+            ...day,
+            amount: Number(((perDayCents + adjustment) / 100).toFixed(2))
+        };
+    });
 }
 
 function resolvePayrollDisplayAmounts(record = {}, dailyHistory = []) {
@@ -479,7 +508,7 @@ exports.managePayroll = async (req, res) => {
                 period: periodLabel,
                 netPay: getPayrollAmountValue(p).toFixed(2),
                 month: dateObj ? dateObj.getMonth() : -1,
-                year: dateObj ? dateObj.getFullYear() : -1
+                year: dateObj ? dateObj.getFullYear() : -1,
             };
         });
 
@@ -848,12 +877,18 @@ exports.updatePayroll = async (req, res) => {
         const bonusVal = parseFloat(bonus) || 0;
         const deductionVal = parseFloat(deductions) || 0;
         const netPayVal = basicVal + bonusVal - deductionVal;
+        const updatedDailyHistory = rebalanceDailyHistoryAmounts(
+            payrollBeforeUpdate && payrollBeforeUpdate.dailyHistory,
+            netPayVal
+        );
 
         const updateData = {
             basic: basicVal,
+            salary: basicVal,
             bonus: bonusVal,
             deductions: deductionVal,
             netPay: netPayVal,
+            dailyHistory: updatedDailyHistory,
             status: status
         };
         await payrollModel.update(req.params.id, updateData, employeeId);
@@ -891,6 +926,9 @@ exports.processPayroll = async (req, res) => {
         const employeeId = String(req.body.employeeId || req.query.employeeId || '').trim();
         const payroll = await payrollModel.getById(req.params.id, employeeId);
         if (!payroll) {
+            if (wantsJson(req)) {
+                return res.status(404).json({ success: false, error: 'Payroll record not found.' });
+            }
             req.flash('error', 'Payroll record not found.');
             return res.redirect('/manage-payroll');
         }
@@ -899,13 +937,13 @@ exports.processPayroll = async (req, res) => {
         let finalNetPay = getPayrollAmountValue(payroll);
         const updatePayload = { status: 'Processed' };
         // Include existing basic, bonus, deductions so payrollModel.update can use them
-        updatePayload.basic = getNumericValue(payroll.basic);
+        updatePayload.basic = getNumericValue(payroll.basic ?? payroll.salary);
         updatePayload.bonus = getNumericValue(payroll.bonus);
         updatePayload.deductions = getNumericValue(payroll.deductions);
         
         // Kung 0 ang netPay, subukang kalkulahin mula sa basic/bonus/deductions o dailyHistory
         if (finalNetPay === 0) {
-            const basic = parseFloat(payroll.basic) || 0;
+            const basic = parseFloat(payroll.basic ?? payroll.salary) || 0;
             const bonus = parseFloat(payroll.bonus) || 0;
             const deductions = parseFloat(payroll.deductions) || 0;
             finalNetPay = basic + bonus - deductions;
@@ -923,8 +961,14 @@ exports.processPayroll = async (req, res) => {
             employeeId: payroll.employeeId || employeeId,
             employeeName: payroll.employeeName
         });
+        if (wantsJson(req)) {
+            return res.json({ success: true, status: 'Processed', id: req.params.id });
+        }
         req.flash('success', 'Payroll processed successfully for this employee.');
     } catch (error) {
+        if (wantsJson(req)) {
+            return res.status(400).json({ success: false, error: 'Failed to process payroll.' });
+        }
         req.flash('error', 'Failed to process payroll.');
     }
     res.redirect('/manage-payroll');

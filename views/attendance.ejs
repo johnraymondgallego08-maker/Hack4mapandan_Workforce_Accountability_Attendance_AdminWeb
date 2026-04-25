@@ -1,18 +1,25 @@
+<%
+    const editMode = typeof isEditMode !== 'undefined' ? isEditMode : false;
+    const values = typeof formValues !== 'undefined' && formValues ? formValues : {};
+    const actionUrl = typeof formAction !== 'undefined' && formAction ? formAction : '/attendance/add';
+    const buttonLabel = typeof submitLabel !== 'undefined' && submitLabel ? submitLabel : 'RECORD ATTENDANCE';
+%>
 <div class="page-container" style="max-width: 600px; margin: 0 auto;">
     <div class="page-header" style="margin-bottom: 2rem; text-align: center;">
         <div>
-            <h1>Log Manual Attendance</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Manually record entry/exit data for personnel when automated systems are unavailable.</p>
+            <h1><%= editMode ? 'Edit Attendance' : 'Log Manual Attendance' %></h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem;"><%= editMode ? 'Update attendance details for an existing personnel log.' : 'Manually record entry/exit data for personnel when automated systems are unavailable.' %></p>
         </div>
     </div>
 
     <div class="card" style="padding: 2.5rem;">
-        <form action="/attendance/add" method="POST">
+        <form action="<%= actionUrl %>" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div style="margin-bottom: 1.5rem;">
                 <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Employee Name</label>
                 <div style="position: relative;">
                     <i data-lucide="user" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
-                    <input type="text" name="employeeName" placeholder="Full legal name" required style="width: 100%; padding-left: 3rem;">
+                    <input type="text" name="employeeName" placeholder="Full legal name" required value="<%= values.employeeName || '' %>" style="width: 100%; padding-left: 3rem;">
                 </div>
             </div>
 
@@ -20,18 +27,18 @@
                 <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Log Date</label>
                 <div style="position: relative;">
                     <i data-lucide="calendar" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
-                    <input type="date" name="date" required style="width: 100%; padding-left: 3rem;">
+                    <input type="date" name="date" required value="<%= values.date || '' %>" style="width: 100%; padding-left: 3rem;">
                 </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                 <div>
                     <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Time In</label>
-                    <input type="time" name="timeIn" required style="width: 100%;">
+                    <input type="time" name="timeIn" required value="<%= values.timeIn || '' %>" style="width: 100%;">
                 </div>
                 <div>
                     <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Time Out</label>
-                    <input type="time" name="timeOut" style="width: 100%;">
+                    <input type="time" name="timeOut" value="<%= values.timeOut || '' %>" style="width: 100%;">
                 </div>
             </div>
 
@@ -39,13 +46,13 @@
                 <label style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Verification Location</label>
                 <div style="position: relative;">
                     <i data-lucide="map-pin" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted);"></i>
-                    <input type="text" name="location" placeholder="e.g. Main Gate, Office B" required style="width: 100%; padding-left: 3rem;">
+                    <input type="text" name="location" placeholder="e.g. Main Gate, Office B" required value="<%= values.location || '' %>" style="width: 100%; padding-left: 3rem;">
                 </div>
             </div>
 
             <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-weight: 800; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                <i data-lucide="plus-circle" style="width: 18px; height: 18px;"></i>
-                <span>RECORD ATTENDANCE</span>
+                <i data-lucide="<%= editMode ? 'save' : 'plus-circle' %>" style="width: 18px; height: 18px;"></i>
+                <span><%= buttonLabel %></span>
             </button>
         </form>
     </div>
@@ -55,4 +62,4 @@
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     });
-</script>
+</script>

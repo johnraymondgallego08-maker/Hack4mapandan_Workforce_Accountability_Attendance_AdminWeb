@@ -75,8 +75,7 @@
     <div class="page-header">
         <div>
             <h1>Manage Leave Requests</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Review, approve, or reject employee leave
-                applications.</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Review pending leave applications and maintain the request history.</p>
         </div>
     </div>
 
@@ -176,11 +175,13 @@
                                     <td style="text-align: right;">
                                         <div class="table-action-group">
                                             <form action="/leave/approve/<%= leave.id %>" method="POST" class="inline">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <button type="submit" class="btn-action btn-approve" title="Approve">
                                                     <i data-lucide="check" style="width: 18px; height: 18px;"></i>
                                                 </button>
                                             </form>
                                             <form action="/leave/reject/<%= leave.id %>" method="POST" class="inline">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <button type="submit" class="btn-action btn-reject" title="Reject">
                                                     <i data-lucide="x" style="width: 18px; height: 18px;"></i>
                                                 </button>
@@ -308,6 +309,7 @@
                                         <div class="table-action-group">
                                             <form action="/leave/delete/<%= leave.id %>" method="POST" class="inline"
                                                 onsubmit="confirmDelete(this, 'Delete Leave Record', 'This will permanently remove this leave request from history.')">
+                                                <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                 <button type="submit" class="btn-action btn-delete" title="Delete">
                                                     <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
                                                 </button>

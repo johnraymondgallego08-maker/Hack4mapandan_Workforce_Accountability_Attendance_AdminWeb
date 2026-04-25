@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const createPendingRow = (data) => {
+        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
         const row = document.createElement('tr');
         row.dataset.overtimeId = data.id;
         const status = getNormalizedStatus(data) || 'Pending Approval';
@@ -85,11 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <td style="text-align: right;">
                 <div class="table-action-group">
                     <form action="/manage-overtime/approve/${data.id}" method="POST" class="inline">
+                        <input type="hidden" name="_csrf" value="${csrfToken}">
                         <button type="submit" class="btn-action btn-approve" title="Approve">
                             <i data-lucide="check" style="width: 18px; height: 18px;"></i>
                         </button>
                     </form>
                     <form action="/manage-overtime/reject/${data.id}" method="POST" class="inline">
+                        <input type="hidden" name="_csrf" value="${csrfToken}">
                         <button type="submit" class="btn-action btn-reject" title="Reject">
                             <i data-lucide="x" style="width: 18px; height: 18px;"></i>
                         </button>

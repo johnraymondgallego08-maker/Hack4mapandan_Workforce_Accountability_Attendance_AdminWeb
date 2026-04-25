@@ -47,3 +47,40 @@ exports.addAttendance = async (data) => {
     const docRef = await attendanceCollection.add(newRecord);
     return { id: docRef.id, ...newRecord };
 };
+
+exports.getAttendanceById = async (id) => {
+    try {
+        const doc = await getAttendanceCollection().doc(id).get();
+        if (!doc.exists) {
+            return null;
+        }
+        return { id: doc.id, ...doc.data() };
+    } catch (error) {
+        console.error("Error getting attendance record by ID:", error);
+        return null;
+    }
+};
+
+exports.updateAttendance = async (id, data) => {
+    try {
+        const attendanceCollection = getAttendanceCollection();
+        await attendanceCollection.doc(id).update({
+            ...data,
+            updatedAt: new Date()
+        });
+        return true;
+    } catch (error) {
+        console.error("Error updating attendance record:", error);
+        return false;
+    }
+};
+
+exports.deleteAttendance = async (id) => {
+    try {
+        await getAttendanceCollection().doc(id).delete();
+        return true;
+    } catch (error) {
+        console.error("Error deleting attendance record:", error);
+        return false;
+    }
+};

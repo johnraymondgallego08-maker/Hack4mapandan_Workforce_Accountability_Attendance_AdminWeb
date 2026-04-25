@@ -1,39 +1,42 @@
+<%
+    const eventRecord = typeof record !== 'undefined' && record ? record : {};
+%>
 <div class="page-container" style="max-width: 760px; margin: 0 auto;">
     <div class="page-header" style="margin-bottom: 2rem; text-align: center;">
         <div>
             <h1>Edit Event or Announcement</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Update the content, replace the cover photo, or change the status from draft to public.</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;"></p>
         </div>
     </div>
 
     <div class="card" style="padding: 2rem;">
-        <form id="editEventForm" action="/manage-events/edit/<%= record.id %>" method="POST" enctype="multipart/form-data">
+        <form id="editEventForm" action="/manage-events/edit/<%= eventRecord.id || '' %>" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div>
                     <label for="type" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Type</label>
                     <select id="type" name="type" required>
-                        <option value="announcement" <%= record.type === 'announcement' ? 'selected' : '' %>>Announcement</option>
-                        <option value="event" <%= record.type === 'event' ? 'selected' : '' %>>Event</option>
+                        <option value="announcement" <%= eventRecord.type === 'announcement' ? 'selected' : '' %>>Announcement</option>
+                        <option value="event" <%= eventRecord.type === 'event' ? 'selected' : '' %>>Event</option>
                     </select>
                 </div>
                 <div>
                     <label for="status" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Status</label>
                     <select id="status" name="status" required>
-                        <option value="Public" <%= record.status === 'Public' ? 'selected' : '' %>>Public</option>
-                        <option value="Draft" <%= record.status === 'Draft' ? 'selected' : '' %>>Draft</option>
+                        <option value="Public" <%= eventRecord.status === 'Public' ? 'selected' : '' %>>Public</option>
+                        <option value="Draft" <%= eventRecord.status === 'Draft' ? 'selected' : '' %>>Draft</option>
                     </select>
                 </div>
             </div>
 
             <label for="title" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Title</label>
-            <input type="text" id="title" name="title" value="<%= record.title || '' %>" required>
+            <input type="text" id="title" name="title" value="<%= eventRecord.title || '' %>" required>
 
             <label for="summary" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Summary</label>
-            <textarea id="summary" name="summary" rows="3"><%= record.summary || '' %></textarea>
+            <textarea id="summary" name="summary" rows="3"><%= eventRecord.summary || '' %></textarea>
 
             <label for="content" style="display: block; font-weight: 700; margin-bottom: 0.35rem;">Content</label>
-            <textarea id="content" name="content" rows="6"><%= record.content || '' %></textarea>
+            <textarea id="content" name="content" rows="6"><%= eventRecord.content || '' %></textarea>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div>

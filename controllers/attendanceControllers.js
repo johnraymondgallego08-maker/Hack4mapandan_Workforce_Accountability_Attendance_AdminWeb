@@ -39,6 +39,33 @@ function getFirstDefinedValue(...values) {
     return 0;
 }
 
+function buildDateTimeFromForm(dateValue, timeValue) {
+    if (!dateValue) return null;
+
+    const safeTime = timeValue && String(timeValue).trim() ? String(timeValue).trim() : '00:00';
+    const parsed = new Date(`${dateValue}T${safeTime}:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateForInput(dateInput) {
+    const date = parseDate(dateInput);
+    if (!date) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatTimeForInput(dateInput) {
+    const date = parseDate(dateInput);
+    if (!date) return '';
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
 // Helper to format time
 function formatTime(dateInput) {
     const date = parseDate(dateInput);
@@ -716,10 +743,8 @@ exports.dashboard = async (req, res) => {
         leaveRequests,
         recentActivity,
         payrollList, // Pass the original payrollList, as it should already contain netPay from the database
-        totalNetPay: payrollMetrics.total,
         payrollMetrics,
-        holidays: upcomingHolidays,
-        totalNetPay: totalNetPaySum,
+        totalNetPay: payrollMetrics.total,
         holidays: monthlyHolidays,
         holidayMonthLabel: currentMonthStart.toLocaleDateString('en-US', {
             timeZone: APP_TIMEZONE,
@@ -745,6 +770,87 @@ exports.storeAttendance = async (req, res) => {
     } catch (error) {
         req.flash('error', 'Failed to add attendance record.');
     }
+    res.redirect('/attendance-monitor');
+};
+
+exports.editAttendancePage = async (req, res) => {
+    try {
+        const attendance = await attendanceModel.getAttendanceById(req.params.id);
+        if (!attendance) {
+            req.flash('error', 'Attendance record not found.');
+            return res.redirect('/attendance-monitor');
+        }
+
+        res.render('attendance', {
+            title: 'Edit Attendance',
+            attendance,
+            formAction: `/attendance/edit/${attendance.id}`,
+            submitLabel: 'UPDATE ATTENDANCE',
+            isEditMode: true,
+            formValues: {
+                employeeName: attendance.employeeName || attendance.name || '',
+                date: formatDateForInput(attendance.date || attendance.timestamp || attendance.timeIn),
+                timeIn: formatTimeForInput(attendance.timeIn),
+                timeOut: formatTimeForInput(attendance.timeOut),
+                location: attendance.location || attendance.coords?.address || ''
+            }
+        });
+    } catch (error) {
+        console.error('Error loading attendance edit page:', error);
+        req.flash('error', 'Failed to load attendance record.');
+        res.redirect('/attendance-monitor');
+    }
+};
+
+exports.updateAttendance = async (req, res) => {
+    try {
+        const existing = await attendanceModel.getAttendanceById(req.params.id);
+        if (!existing) {
+            req.flash('error', 'Attendance record not found.');
+            return res.redirect('/attendance-monitor');
+        }
+
+        const timeIn = buildDateTimeFromForm(req.body.date, req.body.timeIn);
+        const timeOut = req.body.timeOut ? buildDateTimeFromForm(req.body.date, req.body.timeOut) : null;
+
+        const updatedData = {
+            ...existing,
+            employeeName: req.body.employeeName,
+            name: req.body.employeeName,
+            date: req.body.date ? new Date(req.body.date) : (existing.date || existing.timestamp || new Date()),
+            location: req.body.location,
+            timeIn: timeIn || existing.timeIn || null,
+            timeOut,
+            timestamp: timeIn || existing.timestamp || new Date()
+        };
+
+        const updated = await attendanceModel.updateAttendance(req.params.id, updatedData);
+        if (!updated) {
+            req.flash('error', 'Failed to update attendance record.');
+            return res.redirect('/attendance-monitor');
+        }
+
+        req.flash('success', 'Attendance record updated successfully.');
+    } catch (error) {
+        console.error('Error updating attendance record:', error);
+        req.flash('error', 'Failed to update attendance record.');
+    }
+
+    res.redirect('/attendance-monitor');
+};
+
+exports.deleteAttendance = async (req, res) => {
+    try {
+        const deleted = await attendanceModel.deleteAttendance(req.params.id);
+        req.flash(
+            deleted ? 'success' : 'error',
+            deleted ? 'Attendance record deleted successfully.' : 'Failed to delete attendance record.'
+        );
+    } catch (error) {
+        console.error('Error deleting attendance record:', error);
+        req.flash('error', 'Failed to delete attendance record.');
+    }
+
     res.redirect('/attendance-monitor');
 };
 

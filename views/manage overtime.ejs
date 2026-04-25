@@ -16,6 +16,14 @@
     });
 %>
 <style>
+    .overtime-card-header {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1.5rem 2rem;
+        background: #fff;
+        border-bottom: 1px solid #f3f4f6;
+    }
     .filter-container {
         display: flex;
         flex-wrap: wrap;
@@ -55,7 +63,8 @@
         transition: all 0.2s;
         white-space: nowrap;
         box-sizing: border-box;
-        margin-bottom: 1rem;
+        justify-content: center;
+        flex: 0 0 auto;
     }
     .btn-csv-red:hover {
         opacity: 0.9;
@@ -90,18 +99,38 @@
         z-index: 30;
         background: #f9fafb;
     }
+
+    .overtime-table td:last-child {
+        white-space: nowrap;
+    }
+
+    .overtime-table .table-action-group {
+        justify-content: flex-end;
+    }
+
+    @media (max-width: 768px) {
+        .overtime-card-header {
+            padding: 1.25rem;
+        }
+
+        .filter-item,
+        .search-input-wrapper,
+        .btn-csv-red {
+            flex: 1 1 100%;
+        }
+    }
 </style>
 
 <div class="page-container">
     <div class="page-header">
         <div>
             <h1>Manage Overtime Requests</h1>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Review and process employee overtime submittals for the current period.</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Review pending overtime requests and track approval history in one place.</p>
         </div>
     </div>
 
     <div class="card" style="padding: 0; overflow: hidden; border-radius: 1.5rem;">
-        <div class="card-header">
+        <div class="card-header overtime-card-header">
             <h3>Request Logs</h3>
             <div class="filter-container">
                 <div class="search-input-wrapper">
@@ -133,7 +162,7 @@
             </div>
         </div>
         <div class="table-responsive" style="margin-top: 0; border: none; border-radius: 0; --table-min-width: 1080px;">
-            <table id="overtimeTable">
+            <table id="overtimeTable" class="overtime-table">
                 <thead>
                     <tr>
                                 <th data-sortable="true">ID</th>
@@ -163,11 +192,13 @@
                                 <td style="text-align: right;">
                                     <div class="table-action-group">
                                         <form action="/manage-overtime/approve/<%= request.id %>" method="POST" class="inline">
+                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                             <button type="submit" class="btn-action btn-approve" title="Approve">
                                                 <i data-lucide="check" style="width: 18px; height: 18px;"></i>
                                             </button>
                                         </form>
                                         <form action="/manage-overtime/reject/<%= request.id %>" method="POST" class="inline" onsubmit="confirmDelete(this, 'Reject Request', 'Are you sure you want to reject this overtime request?')">
+                                            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                             <button type="submit" class="btn-action btn-reject" title="Reject">
                                                 <i data-lucide="x" style="width: 18px; height: 18px;"></i>
                                             </button>

@@ -1,3 +1,6 @@
+<%
+    const directoryEmployees = Array.isArray(typeof employees !== 'undefined' ? employees : null) ? employees : [];
+%>
 <div class="page-container">
     <div class="page-header" style="margin-bottom: 2rem;">
         <div>
@@ -128,12 +131,12 @@
                 </div>
                 <select id="roleFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
                     <option value="">All Roles</option>
-                    <% const roles = [...new Set(employees.map(e => e.role))].sort(); %>
+                    <% const roles = [...new Set(directoryEmployees.map(e => e.role))].sort(); %>
                     <% roles.forEach(role => { %><option value="<%= role %>"><%= role %></option><% }) %>
                 </select>
                 <select id="deptFilter" style="padding: 0.75rem; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; font-weight: 500; color: #374151;">
                     <option value="">All Departments</option>
-                    <% const depts = [...new Set(employees.map(e => e.department).filter(d => d))].sort(); %>
+                    <% const depts = [...new Set(directoryEmployees.map(e => e.department).filter(d => d))].sort(); %>
                     <% depts.forEach(dept => { %><option value="<%= dept %>"><%= dept %></option><% }) %>
                 </select>
             </div>
@@ -156,8 +159,8 @@
                     </tr>
                 </thead>
                 <tbody id="directoryTableBody">
-                    <% if (locals.employees && employees.length > 0) { %>
-                        <% employees.forEach(emp => { %>
+                    <% if (directoryEmployees.length > 0) { %>
+                        <% directoryEmployees.forEach(emp => { %>
                             <tr style="border-bottom: 1px solid #f3f4f6; transition: background 0.2s;">
                                 <td style="padding: 1rem 1.5rem;" data-search="<%= emp.name %> <%= emp.email %>">
                                     <div style="display: flex; align-items: center; gap: 1rem;">

@@ -23,51 +23,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Handle record deleted in real-time
-    realtime.on('attendance-deleted', (data) => {
-        console.log('[ATTENDANCE] Real-time update - record deleted:', data);
-        const rows = document.querySelectorAll('#attendanceTable tbody tr');
-        rows.forEach((row) => {
-            const deleteBtn = row.querySelector('.delete-attendance');
-            if (deleteBtn && deleteBtn.getAttribute('data-id') === data.id) {
-                row.style.opacity = '0.5';
-                row.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                setTimeout(() => {
-                    row.remove();
-                    // Trigger table refresh if you have a pagination manager
-                    if (window.attendanceTableManager) window.attendanceTableManager.refresh();
-                }, 500);
-                showNotification('A record was deleted by another admin', 'info');
-            }
-        });
-    });
+    let reloadTimer = null;
+    const scheduleRefresh = () => {
+        window.clearTimeout(reloadTimer);
+        reloadTimer = window.setTimeout(() => window.location.reload(), 1200);
+    };
 
-    // Handle record updated in real-time
     realtime.on('attendance-updated', (data) => {
         console.log('[ATTENDANCE] Real-time update - record updated:', data);
-        const rows = document.querySelectorAll('#attendanceTable tbody tr');
-        rows.forEach((row) => {
-            const editBtn = row.querySelector('a[href*="/attendance/edit/"]');
-            if (editBtn && editBtn.href.includes(data.id)) {
-                row.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                
-                // Update cells with new data
-                if (data.timeIn) row.querySelector('.mono-text.accent-info:nth-child(2)').textContent = data.timeIn;
-                if (data.timeOut) row.querySelector('.mono-text.accent-info:nth-child(3)').textContent = data.timeOut;
-                if (data.hoursWorked) row.querySelector('.hours-col').textContent = data.hoursWorked;
-                
-                // Update Status Badges
-                const badges = row.querySelectorAll('.status-badge');
-                if (data.dailyStatus && badges[0]) {
-                    badges[0].textContent = data.dailyStatus;
-                    badges[0].className = `status-badge status-${data.dailyStatus.toLowerCase()}`;
-                }
+        const row = document.querySelector(`#attendanceTable tbody tr[data-attendance-id="${data.id}"]`);
+        if (row) {
+            row.style.backgroundColor = data.changeType === 'removed'
+                ? 'rgba(239, 68, 68, 0.1)'
+                : 'rgba(59, 130, 246, 0.1)';
+        }
 
-                setTimeout(() => {
-                    row.style.backgroundColor = '';
-                }, 3000);
-                showNotification('A record was updated', 'info');
-            }
-        });
+        if (data.changeType === 'removed') {
+            showNotification('An attendance record was removed. Refreshing list...', 'info');
+        } else if (data.changeType === 'added') {
+            showNotification('A new attendance record was added. Refreshing list...', 'info');
+        } else {
+            showNotification('An attendance record was updated. Refreshing list...', 'info');
+        }
+
+        scheduleRefresh();
     });
 });

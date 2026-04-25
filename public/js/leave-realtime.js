@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Intercept Approve/Reject/Delete forms to prevent page navigation (disconnection)
     document.addEventListener('submit', async (e) => {
         const form = e.target;
-        if (!form.action.includes('/manage-leave/approve/') && 
-            !form.action.includes('/manage-leave/reject/') &&
-            !form.action.includes('/manage-leave/delete/')) {
+        if (!form.action.includes('/leave/approve/') &&
+            !form.action.includes('/leave/reject/') &&
+            !form.action.includes('/leave/delete/')) {
             return;
         }
 
