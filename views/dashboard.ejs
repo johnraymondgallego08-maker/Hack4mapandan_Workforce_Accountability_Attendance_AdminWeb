@@ -10,13 +10,26 @@
     const workforcePulse = typeof employeeStatusList !== 'undefined' ? employeeStatusList : [];
     const payrollData = typeof payrollMetrics !== 'undefined' ? payrollMetrics : { processed: 0, pending: 0 };
     const activityFeed = typeof recentActivity !== 'undefined' ? recentActivity : [];
+    
     const upcomingHolidays = typeof holidays !== 'undefined' ? holidays : [];
-    const dashboardEvents = typeof events !== 'undefined' ? events : [];
-    const dashboardAnnouncements = typeof announcements !== 'undefined' ? announcements : [];
-    const currentHolidayMonthLabel = typeof locals.holidayMonthLabel !== 'undefined' ? locals.holidayMonthLabel : '';
-    const currentDashboardCharts = typeof locals.dashboardCharts !== 'undefined' ? locals.dashboardCharts : {};
+
+    const currentHolidayMonthLabel = typeof holidayMonthLabel !== 'undefined' ? holidayMonthLabel : '';
+    const currentDashboardCharts = typeof dashboardCharts !== 'undefined' ? dashboardCharts : {};
     const attendanceChartData = currentDashboardCharts.attendance || { labels: ['Present', 'Active', 'Late', 'Absent'], values: [0, 0, 0, 0] };
     const overtimeChartData = currentDashboardCharts.overtime || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], values: [0, 0, 0, 0, 0, 0, 0] };
+    const calendarDate = new Date();
+    const calendarYear = calendarDate.getFullYear();
+    const calendarMonth = calendarDate.getMonth();
+    const todayDate = calendarDate.getDate();
+    const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay();
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const holidayDayMap = new Map();
+    upcomingHolidays.forEach((holiday) => {
+        const holidayDate = new Date(holiday.date);
+        if (!Number.isNaN(holidayDate.getTime()) && holidayDate.getMonth() === calendarMonth && holidayDate.getFullYear() === calendarYear) {
+            holidayDayMap.set(holidayDate.getDate(), holiday);
+        }
+    });
 %>
 
 <div class="dashboard-shell">
@@ -86,7 +99,7 @@
 
             <div class="pulse-list">
                 <% workforcePulse.forEach(employee => { %>
-                    <% 
+                    <%
                         let pulseStatusClass = 'status-absent';
                         const pulseStatus = String(employee.status || '').toLowerCase();
                         if (pulseStatus.includes('present') || pulseStatus.includes('active') || pulseStatus.includes('timed in')) pulseStatusClass = 'status-present';
@@ -108,9 +121,7 @@
                                 <span><%= employee.status %> today</span>
                             </div>
                         </div>
-                        <span class="status-badge <%= pulseStatusClass %>">
-                            <%= employee.status %>
-                        </span>
+                        <span class="status-badge <%= pulseStatusClass %>"><%= employee.status %></span>
                     </div>
                 <% }) %>
 
@@ -217,7 +228,6 @@
             </div>
         </div>
 
-        <!-- Google Calendar Section -->
         <div class="dashboard-panel dashboard-panel--calendar" style="grid-column: span 1;">
             <div class="card-header">
                 <h3>Workforce Calendar</h3>
@@ -228,99 +238,154 @@
             </div>
 
             <div class="calendar-container" style="padding: 1rem; background: #fff; border-radius: 12px; overflow: hidden;">
-                <iframe 
-                    src="https://calendar.google.com/calendar/embed?height=400&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FManila&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTzs=0&src=ZW4ucGhpbGlwcGluZXMjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%237c3aed" 
-                    style="border:0; border-radius: 8px;" 
-                    width="100%" 
-                    height="400" 
-                    frameborder="0" 
-                    scrolling="no">
-                </iframe>
-                <h3>Holidays This Month</h3>
-                <span style="font-size: 0.85rem; color: var(--text-muted);"><%= currentHolidayMonthLabel || '' %></span>
-            </div>
-        </div>
-    </section>
+                <div class="workforce-calendar">
+                    <div class="workforce-calendar__weekdays">
+                        <span>Sun</span>
+                        <span>Mon</span>
+                        <span>Tue</span>
+                        <span>Wed</span>
+                        <span>Thu</span>
+                        <span>Fri</span>
+                        <span>Sat</span>
+                    </div>
+                    <div class="workforce-calendar__grid">
+                        <% for (let blankDay = 0; blankDay < firstDayIndex; blankDay += 1) { %>
+                            <div class="workforce-calendar__cell workforce-calendar__cell--empty"></div>
+                        <% } %>
+                        <% for (let day = 1; day <= daysInMonth; day += 1) { %>
+                            <% const holiday = holidayDayMap.get(day); %>
+                            <% const isToday = day === todayDate; %>
+                            <div class="workforce-calendar__cell <%= isToday ? 'workforce-calendar__cell--today' : '' %> <%= holiday ? 'workforce-calendar__cell--holiday' : '' %>">
+                                <span class="workforce-calendar__day"><%= day %></span>
+                                <% if (holiday) { %>
+                                    <span class="workforce-calendar__label" title="<%= holiday.name %>"><%= holiday.name %></span>
+                                <% } %>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
 
-    <!-- Events and Announcements Section -->
-    <section class="dashboard-comms" style="margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-        <!-- Left Side: Events -->
-        <div class="dashboard-panel">
-            <div class="card-header">
-                <h3>Latest Events</h3>
-                <a href="/manage-events" class="dashboard-panel__cta">View All</a>
-            </div>
-            <div class="pulse-list">
-                <% if (dashboardEvents.length > 0) { %>
-                    <% dashboardEvents.forEach(event => { %>
-                        <div class="pulse-item">
-                            <div class="person-pill">
-                                <div class="person-pill__avatar" style="background: var(--primary-light); color: var(--primary);">
-                                    <i data-lucide="party-popper" style="width: 18px;"></i>
-                                </div>
-                                <div class="person-pill__content">
-                                    <strong><%= event.title %></strong>
-                                    <span><%= event.scheduleLabel || 'No date set' %></span>
+                <div style="margin-top: 1rem; display: grid; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
+                        <h3 style="margin: 0;">Holidays This Month</h3>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);"><%= currentHolidayMonthLabel || '' %></span>
+                    </div>
+
+                    <% if (upcomingHolidays.length > 0) { %>
+                        <% upcomingHolidays.slice(0, 6).forEach(holiday => { %>
+                            <div class="pulse-item" style="padding: 0.75rem 0; border-bottom: 1px solid rgba(15, 23, 42, 0.06);">
+                                <div class="person-pill">
+                                    <div class="person-pill__avatar" style="background: #ede9fe; color: #7c3aed;">
+                                        <span><%= holiday.dayLabel || '--' %></span>
+                                    </div>
+                                    <div class="person-pill__content">
+                                        <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
+                                        <span><%= holiday.type || 'Holiday' %> • <%= holiday.statusLabel || 'Upcoming' %></span>
+                                    </div>
                                 </div>
                             </div>
-                            <span class="status-badge status-present">Upcoming</span>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <div class="dashboard-empty-state" style="padding: 2rem;">No upcoming events.</div>
-                <% } %>
-            </div>
-        </div>
-
-        <!-- Right Side: Announcements -->
-        <div class="dashboard-panel">
-            <div class="card-header">
-                <h3>Announcements</h3>
-            </div>
-            <div class="pulse-list">
-                <% if (dashboardAnnouncements.length > 0) { %>
-                    <% dashboardAnnouncements.forEach(ann => { %>
-                        <div class="pulse-item">
-                            <div class="person-pill">
-                                <div class="person-pill__avatar" style="background: #fff7ed; color: #ea580c;">
-                                    <i data-lucide="megaphone" style="width: 18px;"></i>
-                                </div>
-                                <div class="person-pill__content">
-                                    <strong><%= ann.title %></strong>
-                                    <span style="display: block; width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                        <%= ann.summary %>
-                                    </span>
-                                </div>
-                            <div class="holiday-item__content">
-                                <strong><%= holiday.name || 'Unnamed Holiday' %></strong>
-                                <span><%= holiday.type || 'Holiday' %> • <%= holiday.statusLabel || 'Upcoming' %></span>
-                            </div>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <div class="dashboard-empty-state" style="padding: 2rem;">No new announcements.</div>
-                    <div class="dashboard-empty-state">No holidays found for this month.</div>
-                <% } %>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="dashboard-empty-state">No holidays found for this month.</div>
+                    <% } %>
+                </div>
             </div>
         </div>
     </section>
 </div>
 
 <style>
-    /* Para sa responsive layout ng events at announcements */
     @media (max-width: 1024px) {
         .dashboard-comms {
             grid-template-columns: 1fr !important;
         }
     }
-    
-    /* Pag-align sa style ng Google Calendar iframe */
-    .calendar-container iframe {
-        filter: contrast(0.9) saturate(1.1);
+
+    .workforce-calendar {
+        border: 1px solid rgba(124, 58, 237, 0.12);
+        border-radius: 14px;
+        padding: 1rem;
+        background: linear-gradient(180deg, rgba(124, 58, 237, 0.04), rgba(255, 255, 255, 0.96));
+    }
+
+    .workforce-calendar__weekdays,
+    .workforce-calendar__grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.45rem;
+    }
+
+    .workforce-calendar__weekdays {
+        margin-bottom: 0.65rem;
+    }
+
+    .workforce-calendar__weekdays span {
+        text-align: center;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .workforce-calendar__cell {
+        min-height: 78px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        padding: 0.55rem 0.45rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .workforce-calendar__cell--empty {
+        background: rgba(15, 23, 42, 0.03);
+        border-style: dashed;
+    }
+
+    .workforce-calendar__cell--today {
+        border-color: rgba(124, 58, 237, 0.45);
+        box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.18);
+    }
+
+    .workforce-calendar__cell--holiday {
+        background: rgba(237, 233, 254, 0.55);
+    }
+
+    .workforce-calendar__day {
+        font-size: 0.88rem;
+        font-weight: 800;
+        color: var(--text-heading);
+    }
+
+    .workforce-calendar__label {
+        display: inline-block;
+        font-size: 0.68rem;
+        line-height: 1.25;
+        color: #6d28d9;
+        background: rgba(124, 58, 237, 0.1);
+        border-radius: 999px;
+        padding: 0.15rem 0.45rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .dashboard-panel--calendar {
         margin-bottom: 0;
+    }
+
+    @media (max-width: 640px) {
+        .workforce-calendar__cell {
+            min-height: 60px;
+            padding: 0.45rem 0.3rem;
+        }
+
+        .workforce-calendar__label {
+            font-size: 0.62rem;
+            padding: 0.12rem 0.35rem;
+        }
     }
 </style>
 
@@ -329,124 +394,132 @@
         const searchInput = document.getElementById('activitySearch');
         const tableRows = document.querySelectorAll('#recentActivityTable tbody tr');
 
-        const ctx1 = document.getElementById('attendanceChart').getContext('2d');
-        new Chart(ctx1, {
-            type: 'doughnut',
-            data: {
-                labels: ['Active', 'Suspended', 'Absent'],
-                datasets: [{
-                    data: [<%= attendanceOverviewData.active %>, <%= suspendedCount %>, <%= attendanceOverviewData.absent %>],
-                    backgroundColor: ['#7c3aed', '#dc2626', '#e4def8'],
-                labels: <%- JSON.stringify(attendanceChartData.labels) %>,
-                datasets: [{
-                    data: <%- JSON.stringify(attendanceChartData.values) %>,
-                    backgroundColor: ['#7c3aed', '#38bdf8', '#f59e0b', '#e4def8'],
-                    hoverOffset: 14,
-                    borderWidth: 0,
-                    borderRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '78%',
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: '#756f86',
-                            usePointStyle: true,
-                            padding: 18,
-                            font: { family: 'Outfit', size: 11, weight: '700' }
+        const attendanceCanvas = document.getElementById('attendanceChart');
+        if (attendanceCanvas && typeof Chart !== 'undefined') {
+            const ctx1 = attendanceCanvas.getContext('2d');
+            new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: <%- JSON.stringify(attendanceChartData.labels) %>,
+                    datasets: [{
+                        data: <%- JSON.stringify(attendanceChartData.values) %>,
+                        backgroundColor: ['#7c3aed', '#38bdf8', '#f59e0b', '#e4def8'],
+                        hoverOffset: 14,
+                        borderWidth: 0,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '78%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#756f86',
+                                usePointStyle: true,
+                                padding: 18,
+                                font: { family: 'Outfit', size: 11, weight: '700' }
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
-        const ctx2 = document.getElementById('overtimeChart').getContext('2d');
-        const gradient = ctx2.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, '#6d28d9');
-        gradient.addColorStop(1, '#c4b5fd');
+        const overtimeCanvas = document.getElementById('overtimeChart');
+        if (overtimeCanvas && typeof Chart !== 'undefined') {
+            const ctx2 = overtimeCanvas.getContext('2d');
+            const gradient = ctx2.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, '#6d28d9');
+            gradient.addColorStop(1, '#c4b5fd');
 
-        new Chart(ctx2, {
-            type: 'pie',
-            data: {
-                labels: ['Pending Overtime', 'Pending Leaves'],
-                datasets: [{
-                    data: [<%= pendingOvertime %>, <%= pendingLeaves %>],
-                    backgroundColor: ['#3b82f6', '#d97706'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: '#756f86',
-                            usePointStyle: true,
-                            padding: 18,
-                            font: { family: 'Outfit', size: 11, weight: '700' }
-                        }
-                    }
-                }
-            }
-        });
-
-        const ctx3 = document.getElementById('payrollChart').getContext('2d');
-        new Chart(ctx3, {
-            type: 'bar',
-            data: {
-                labels: ['Processed', 'Pending'],
-                datasets: [{
-                    label: 'Amount (₱)',
-                    data: [<%= payrollData.processed %>, <%= payrollData.pending %>],
-                    backgroundColor: ['#10b981', '#f59e0b'],
-                    borderRadius: 6,
-                    maxBarThickness: 100
-                labels: <%- JSON.stringify(overtimeChartData.labels) %>,
-                datasets: [{
-                    label: 'Overtime Hours',
-                    data: <%- JSON.stringify(overtimeChartData.values) %>,
-                    backgroundColor: gradient,
-                    borderRadius: 12,
-                    barThickness: 16
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false },
-                        ticks: { 
-                            color: '#756f86',
-                            font: { family: 'Outfit', weight: '600', size: 10 },
-                            callback: function(value) { return '₱' + value.toLocaleString(); }
+            new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: <%- JSON.stringify(overtimeChartData.labels) %>,
+                    datasets: [{
+                        label: 'Overtime Hours',
+                        data: <%- JSON.stringify(overtimeChartData.values) %>,
+                        backgroundColor: gradient,
+                        borderRadius: 12,
+                        barThickness: 16
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false },
+                            ticks: {
+                                color: '#756f86',
+                                font: { family: 'Outfit', weight: '600', size: 10 }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#5b5670', font: { family: 'Outfit', weight: '700' } }
                         }
                     },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#5b5670', font: { family: 'Outfit', weight: '700' } }
-                    }
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: { label: (context) => ' ₱' + context.raw.toLocaleString() }
+                    plugins: {
+                        legend: { display: false }
                     }
                 }
-            }
-        });
+            });
+        }
+
+        const payrollCanvas = document.getElementById('payrollChart');
+        if (payrollCanvas && typeof Chart !== 'undefined') {
+            const ctx3 = payrollCanvas.getContext('2d');
+            new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: ['Processed', 'Pending'],
+                    datasets: [{
+                        label: 'Amount (₱)',
+                        data: [<%= payrollData.processed %>, <%= payrollData.pending %>],
+                        backgroundColor: ['#10b981', '#f59e0b'],
+                        borderRadius: 6,
+                        maxBarThickness: 100
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false },
+                            ticks: {
+                                color: '#756f86',
+                                font: { family: 'Outfit', weight: '600', size: 10 },
+                                callback: function(value) { return '₱' + value.toLocaleString(); }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#5b5670', font: { family: 'Outfit', weight: '700' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ' ₱' + Number(context.raw || 0).toLocaleString()
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         if (searchInput) {
             searchInput.addEventListener('keyup', (e) => {
                 const term = e.target.value.toLowerCase();
-                tableRows.forEach(row => {
+                tableRows.forEach((row) => {
                     const text = row.textContent.toLowerCase();
                     row.style.display = text.includes(term) ? '' : 'none';
                 });
