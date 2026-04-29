@@ -157,7 +157,7 @@
                                                     <form action="/payroll/process/<%= record.id %>" method="POST" class="inline">
                                                         <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                                         <input type="hidden" name="employeeId" value="<%= record.employeeId %>">
-                                                        <button type="submit" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 2rem;">Process</button>
+                                                        <button type="submit" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 2rem;">Record Payment</button>
                                                     </form>
                                                     <a href="/payroll/edit/<%= record.id %>?employeeId=<%= encodeURIComponent(record.employeeId || '') %>" class="btn-action" title="Edit">
                                                         <i data-lucide="edit-3" style="width: 18px; height: 18px;"></i>
@@ -276,16 +276,18 @@
 <div id="invoiceModal" class="invoice-modal" hidden>
     <div class="invoice-modal__backdrop" data-close-invoice="true"></div>
     <div class="invoice-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="invoiceModalTitle">
-        <button type="button" class="invoice-modal__close" data-close-invoice="true" aria-label="Close invoice">
-            <i data-lucide="x"></i>
-        </button>
         <div class="invoice-receipt">
             <div class="invoice-receipt__header">
                 <div>
                     <span class="invoice-receipt__eyebrow">Payroll Receipt</span>
                     <h3 id="invoiceModalTitle">Invoice</h3>
                 </div>
-                <div class="invoice-receipt__badge" id="invoiceStatusBadge">Paid</div>
+                <div class="invoice-receipt__header-actions">
+                    <div class="invoice-receipt__badge" id="invoiceStatusBadge">Paid</div>
+                    <button type="button" class="invoice-modal__close" data-close-invoice="true" aria-label="Close invoice">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="invoice-receipt__meta">
@@ -597,11 +599,9 @@
     }
 
     .invoice-modal__close {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
         width: 2.4rem;
         height: 2.4rem;
+        flex: 0 0 2.4rem;
         border-radius: 999px;
         border: 1px solid rgba(15, 23, 42, 0.08);
         background: rgba(255, 255, 255, 0.9);
@@ -609,6 +609,20 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
+        color: #334155;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .invoice-modal__close:hover {
+        background: #fff;
+        border-color: rgba(15, 23, 42, 0.18);
+        transform: translateY(-1px);
+    }
+
+    .invoice-modal__close i {
+        width: 1rem;
+        height: 1rem;
+        stroke-width: 2.5;
     }
 
     .invoice-receipt {
@@ -625,6 +639,14 @@
         gap: 1rem;
         padding-bottom: 1rem;
         border-bottom: 2px dashed rgba(15, 23, 42, 0.12);
+    }
+
+    .invoice-receipt__header-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.65rem;
+        flex-shrink: 0;
     }
 
     .invoice-receipt__eyebrow {
@@ -729,6 +751,10 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
+        .invoice-receipt__header {
+            align-items: center;
+        }
+
         .invoice-receipt__line {
             grid-template-columns: 1fr;
         }
@@ -795,12 +821,24 @@
         };
 
         const formatMoney = (value) => `\u20b1${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const formatInvoiceDate = (value) => {
+            if (!value) return '-';
+            if (typeof value === 'string') return value;
+
+            const seconds = value._seconds ?? value.seconds;
+            if (Number.isFinite(seconds)) {
+                return new Date(seconds * 1000).toLocaleString();
+            }
+
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? '-' : parsed.toLocaleString();
+        };
 
         const openInvoiceModal = (invoice) => {
             if (!invoiceModal || !invoice) return;
 
             invoiceFields.invoiceNumber.textContent = invoice.invoiceNumber || '-';
-            invoiceFields.invoiceIssuedAt.textContent = invoice.issuedAtLabel || invoice.issuedAt || '-';
+            invoiceFields.invoiceIssuedAt.textContent = invoice.issuedAtLabel || formatInvoiceDate(invoice.issuedAt);
             invoiceFields.invoiceEmployeeId.textContent = invoice.employeeCode || invoice.employeeId || '-';
             invoiceFields.invoicePeriod.textContent = invoice.period || '-';
             invoiceFields.invoiceEmployeeName.textContent = invoice.employeeName || '-';

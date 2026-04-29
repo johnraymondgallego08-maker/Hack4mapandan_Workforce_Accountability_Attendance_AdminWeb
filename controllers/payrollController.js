@@ -933,9 +933,18 @@ exports.processPayroll = async (req, res) => {
             return res.redirect('/manage-payroll');
         }
 
-        // Calculate actual netPay before processing
+        if (payroll.status === 'Paid') {
+            await payrollModel.ensureTransactionHistory(req.params.id, employeeId);
+            if (wantsJson(req)) {
+                return res.json({ success: true, status: 'Paid', id: req.params.id, alreadyPaid: true });
+            }
+            req.flash('success', 'Payroll receipt is already recorded.');
+            return res.redirect('/manage-payroll');
+        }
+
+        // Calculate actual netPay before recording the payment receipt.
         let finalNetPay = getPayrollAmountValue(payroll);
-        const updatePayload = { status: 'Processed' };
+        const updatePayload = { status: 'Paid' };
         // Include existing basic, bonus, deductions so payrollModel.update can use them
         updatePayload.basic = getNumericValue(payroll.basic ?? payroll.salary);
         updatePayload.bonus = getNumericValue(payroll.bonus);
@@ -956,15 +965,15 @@ exports.processPayroll = async (req, res) => {
         updatePayload.netPay = finalNetPay;
         await payrollModel.update(req.params.id, updatePayload, employeeId);
         
-        await addPayrollLog(req, 'Payroll Processed', {
+        await addPayrollLog(req, 'Payroll Paid', {
             id: req.params.id,
             employeeId: payroll.employeeId || employeeId,
             employeeName: payroll.employeeName
         });
         if (wantsJson(req)) {
-            return res.json({ success: true, status: 'Processed', id: req.params.id });
+            return res.json({ success: true, status: 'Paid', id: req.params.id });
         }
-        req.flash('success', 'Payroll processed successfully for this employee.');
+        req.flash('success', 'Payroll paid and receipt recorded successfully.');
     } catch (error) {
         if (wantsJson(req)) {
             return res.status(400).json({ success: false, error: 'Failed to process payroll.' });
