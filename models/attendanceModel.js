@@ -37,8 +37,8 @@ exports.getAllAttendance = async () => {
 
 exports.addAttendance = async (data) => {
     const attendanceCollection = getAttendanceCollection();
-    // Ensure both date and timestamp are saved for consistency
-    const timestamp = new Date();
+    // Ensure both date and timestamp are saved for consistency while preserving manual log time.
+    const timestamp = data.timestamp || data.timeIn || new Date();
     const newRecord = {
         ...data,
         date: data.date ? new Date(data.date) : timestamp,

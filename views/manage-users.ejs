@@ -194,6 +194,7 @@
                                     <form action="/users/delete/<%= user.id %>" method="POST" class="inline"
                                         style="margin: 0; display: inline-flex;"
                                         onsubmit="confirmDelete(this, 'Delete Employee', 'This will permanently remove the employee account and its saved profile data.')">
+                                        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
                                         <button type="submit" class="btn-action btn-delete" title="Delete"
                                             style="display: inline-flex; align-items: center; justify-content: center;">
                                             <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>

@@ -37,6 +37,17 @@ function getLoginErrorResponse(error) {
     return { status: 500, error: 'An internal error occurred. Please try again later.' };
 }
 
+function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function normalizeRegisterRole(value) {
+    const role = String(value || '').trim().toLowerCase();
+    if (role === 'admin' || role === 'administrator') return 'Admin';
+    if (role === 'employee') return 'Employee';
+    return '';
+}
+
 exports.loginPage = (req, res) => {
     // If user is already logged in, redirect to dashboard
     if (req.session.user) {
@@ -200,10 +211,25 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
-    const { name, email, password, role, department, position } = req.body;
+    const name = String(req.body.name || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    const normalizedRole = normalizeRegisterRole(req.body.role);
+    const department = String(req.body.department || '').trim();
+    const position = String(req.body.position || '').trim();
 
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !password || !normalizedRole) {
         req.flash('error', 'Please fill out all fields.');
+        return res.redirect('/register');
+    }
+
+    if (!isValidEmail(email)) {
+        req.flash('error', 'Please enter a valid email address.');
+        return res.redirect('/register');
+    }
+
+    if (password.length < 6) {
+        req.flash('error', 'Password must be at least 6 characters long.');
         return res.redirect('/register');
     }
 
@@ -215,10 +241,6 @@ exports.register = async (req, res) => {
             displayName: name,
         });
 
-        const normalizedRole = role.trim();
-        const safeDepartment = String(department || '').trim();
-        const safePosition = String(position || '').trim();
-
         // 2. Save user details to 'employees' collection in Firestore, using the UID from Auth as the document ID
         await db.collection('employees').doc(userRecord.uid).set({
             name: name,
@@ -228,8 +250,8 @@ exports.register = async (req, res) => {
             employmentStatus: '',
             workSchedule: '',
             supervisor: '',
-            department: safeDepartment,
-            position: safePosition
+            department,
+            position
         });
 
         // 3. If role is admin, also add to 'Admin' collection to allow login access

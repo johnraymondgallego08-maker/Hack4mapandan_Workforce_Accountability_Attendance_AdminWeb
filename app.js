@@ -26,6 +26,7 @@ const securityMiddleware = require("./middlewares/securityMiddleware");
 const { sessionMiddleware, flashMiddleware } = require("./middlewares/sessionMiddleware");
 
 // Configure Multer for file uploads
+const allowedUploadMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, path.join(os.tmpdir(), '4dmin-panel-uploads'))
@@ -34,7 +35,36 @@ const storage = multer.diskStorage({
         cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname))
     }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const mimeType = String(file.mimetype || '').toLowerCase();
+        if (allowedUploadMimeTypes.includes(mimeType)) {
+            return cb(null, true);
+        }
+        return cb(new Error('Only image uploads are allowed'));
+    }
+});
+
+function runProfileUpload(req, res, next) {
+    upload.single('profileImage')(req, res, (error) => {
+        if (!error) {
+            return next();
+        }
+
+        let message = error.message || 'Profile image upload failed.';
+        if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+            message = 'Profile image is too large. Maximum size is 5 MB.';
+        }
+
+        if (req.flash) {
+            req.flash('error', message);
+        }
+
+        return res.redirect('/user-info');
+    });
+}
 
 const app = express();
 app.disable('x-powered-by');
@@ -233,7 +263,7 @@ app.use((req, res, next) => {
 app.post(
     '/update-profile',
     authMiddleware.isAuthenticated,
-    upload.single('profileImage'),
+    runProfileUpload,
     securityMiddleware.verifyCsrfToken,
     userController.updateProfile
 );

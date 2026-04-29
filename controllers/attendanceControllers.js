@@ -66,6 +66,66 @@ function formatTimeForInput(dateInput) {
     return `${hours}:${minutes}`;
 }
 
+function normalizeManualAttendanceForm(body = {}, existing = {}, users = []) {
+    const employeeName = String(body.employeeName || existing.employeeName || existing.name || '').trim();
+    const dateValue = String(body.date || '').trim();
+    const timeInValue = String(body.timeIn || '').trim();
+    const timeOutValue = String(body.timeOut || '').trim();
+    const location = String(body.location || existing.location || '').trim();
+    const requestedEmployeeId = String(body.employeeId || existing.employeeId || existing.userId || '').trim();
+    const errors = [];
+
+    if (!employeeName) errors.push('Employee name is required.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) errors.push('A valid attendance date is required.');
+    if (!/^\d{2}:\d{2}$/.test(timeInValue)) errors.push('A valid time in is required.');
+    if (timeOutValue && !/^\d{2}:\d{2}$/.test(timeOutValue)) errors.push('Time out must be a valid time.');
+    if (!location) errors.push('Verification location is required.');
+
+    const timeIn = buildDateTimeFromForm(dateValue, timeInValue);
+    const timeOut = timeOutValue ? buildDateTimeFromForm(dateValue, timeOutValue) : null;
+    const date = buildDateTimeFromForm(dateValue, '00:00');
+
+    if (!timeIn) errors.push('Time in could not be parsed.');
+    if (timeOutValue && !timeOut) errors.push('Time out could not be parsed.');
+    if (timeIn && timeOut && timeOut < timeIn) errors.push('Time out cannot be earlier than time in.');
+
+    if (errors.length) {
+        return { errors };
+    }
+
+    const normalizedRequestedId = requestedEmployeeId.toLowerCase();
+    const normalizedName = employeeName.toLowerCase();
+    const matchedUser = users.find(user => {
+        const userIds = [user.id, user.uid, user.employeeId, user.employeeCode]
+            .map(value => String(value || '').trim().toLowerCase())
+            .filter(Boolean);
+        if (normalizedRequestedId && userIds.includes(normalizedRequestedId)) return true;
+        return String(user.name || '').trim().toLowerCase() === normalizedName;
+    });
+
+    const employeeId = matchedUser
+        ? String(matchedUser.id || matchedUser.uid || matchedUser.employeeId || '').trim()
+        : requestedEmployeeId;
+
+    const data = {
+        employeeName,
+        name: employeeName,
+        date,
+        location,
+        timeIn,
+        timeOut,
+        timestamp: timeIn,
+        status: existing.status || 'Present'
+    };
+
+    if (employeeId) {
+        data.employeeId = employeeId;
+        data.userId = existing.userId || employeeId;
+    }
+
+    return { errors: [], data };
+}
+
 // Helper to format time
 function formatTime(dateInput) {
     const date = parseDate(dateInput);
@@ -765,9 +825,17 @@ exports.addAttendancePage = (req, res) => {
 
 exports.storeAttendance = async (req, res) => {
     try {
-        await attendanceModel.addAttendance(req.body);
+        const users = await userModel.getEmployeeUsers();
+        const normalized = normalizeManualAttendanceForm(req.body, {}, users);
+        if (normalized.errors.length) {
+            req.flash('error', normalized.errors[0]);
+            return res.redirect('/attendance/add');
+        }
+
+        await attendanceModel.addAttendance(normalized.data);
         req.flash('success', 'Attendance record added successfully.');
     } catch (error) {
+        console.error('Error adding attendance record:', error);
         req.flash('error', 'Failed to add attendance record.');
     }
     res.redirect('/attendance-monitor');
@@ -810,18 +878,16 @@ exports.updateAttendance = async (req, res) => {
             return res.redirect('/attendance-monitor');
         }
 
-        const timeIn = buildDateTimeFromForm(req.body.date, req.body.timeIn);
-        const timeOut = req.body.timeOut ? buildDateTimeFromForm(req.body.date, req.body.timeOut) : null;
+        const users = await userModel.getEmployeeUsers();
+        const normalized = normalizeManualAttendanceForm(req.body, existing, users);
+        if (normalized.errors.length) {
+            req.flash('error', normalized.errors[0]);
+            return res.redirect(`/attendance/edit/${req.params.id}`);
+        }
 
         const updatedData = {
             ...existing,
-            employeeName: req.body.employeeName,
-            name: req.body.employeeName,
-            date: req.body.date ? new Date(req.body.date) : (existing.date || existing.timestamp || new Date()),
-            location: req.body.location,
-            timeIn: timeIn || existing.timeIn || null,
-            timeOut,
-            timestamp: timeIn || existing.timestamp || new Date()
+            ...normalized.data
         };
 
         const updated = await attendanceModel.updateAttendance(req.params.id, updatedData);

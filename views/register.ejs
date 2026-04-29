@@ -8,6 +8,7 @@
 
     <div class="card" style="padding: 2.5rem;">
         <form action="/register" method="POST">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
             <div style="margin-bottom: 1.5rem;">
                 <label for="name" style="display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.5rem;">Full Name</label>
                 <div style="position: relative;">
