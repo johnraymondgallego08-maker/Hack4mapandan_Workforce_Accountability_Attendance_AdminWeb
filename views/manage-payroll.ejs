@@ -285,7 +285,7 @@
                 <div class="invoice-receipt__header-actions">
                     <div class="invoice-receipt__badge" id="invoiceStatusBadge">Paid</div>
                     <button type="button" class="invoice-modal__close" data-close-invoice="true" aria-label="Close invoice">
-                        <i data-lucide="x"></i>
+                        <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
             </div>
@@ -609,7 +609,10 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        color: #334155;
+        color: #0f172a;
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     }
 
@@ -619,10 +622,9 @@
         transform: translateY(-1px);
     }
 
-    .invoice-modal__close i {
-        width: 1rem;
-        height: 1rem;
-        stroke-width: 2.5;
+    .invoice-modal__close span {
+        display: block;
+        transform: translateY(-1px);
     }
 
     .invoice-receipt {
